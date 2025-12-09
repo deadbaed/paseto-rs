@@ -59,7 +59,7 @@ pub type UnsignedToken<M, F = ()> = paseto_core::UnsignedToken<core::V4, M, F>;
 /// An [`EncryptedToken`] that has been decrypted
 pub type UnencryptedToken<M, F = ()> = paseto_core::UnencryptedToken<core::V4, M, F>;
 
-/// Private key used for [`encryption`](UnencryptedToken::encrypt) and [`decryptiom`](EncryptedToken::decrypt)
+/// Private key used for [`encryption`](UnencryptedToken::encrypt) and [`decryption`](EncryptedToken::decrypt)
 pub type LocalKey = paseto_core::LocalKey<core::V4>;
 /// Public key used for signature [`verification`](SignedToken::verify)
 pub type PublicKey = paseto_core::PublicKey<core::V4>;
