@@ -11,8 +11,8 @@ pub use paseto_core::validation::Validate;
 use serde_core::Serialize;
 use serde_core::de::DeserializeOwned;
 
-/// `Json` is a type wrapper to implement `Footer` for all types that implement
-/// [`serde_core::Serialize`] and [`serde_core::Deserialize`]
+/// `Json` is a type wrapper to implement [`paseto_core::encodings::Payload`] and [`paseto_core::encodings::Footer`]
+/// for all types that implement [`serde_core::Serialize`] and [`serde_core::Deserialize`]
 ///
 /// When using a JSON footer, you should be aware of the risks of parsing user provided JSON.
 /// <https://github.com/paseto-standard/paseto-spec/blob/master/docs/02-Implementation-Guide/01-Payload-Processing.md#storing-json-in-the-footer>.
