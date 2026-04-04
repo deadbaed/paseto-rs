@@ -2,13 +2,14 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use cipher::StreamCipher;
-use generic_array::sequence::Split;
+use digest::KeyInit;
 use hmac::Mac;
+use hybrid_array::sizes::U32;
 use paseto_core::PasetoError;
 use paseto_core::key::HasKey;
 use paseto_core::paserk::{PkeSealingVersion, PkeUnsealingVersion};
 use paseto_core::version::{PkePublic, PkeSecret};
-use rsa::BigUint;
+use rsa::BoxedUint;
 use rsa::hazmat::{rsa_decrypt_and_check, rsa_encrypt};
 use rsa::traits::PublicKeyParts;
 use sha2::Digest;
@@ -89,21 +90,26 @@ impl PkeSealingVersion for V1 {
         getrandom::fill(&mut r).map_err(|_| PasetoError::CryptoError)?;
         r[0] &= 0x7f;
         r[0] |= 0x40;
-        let c = rsa_encrypt(&sealing_key.0, &BigUint::from_bytes_be(&r))
-            .map_err(|_| PasetoError::CryptoError)?
-            .to_bytes_be();
+        let c = rsa_encrypt(
+            &sealing_key.0,
+            &BoxedUint::from_be_slice(&r, r.len() as u32 * 8).unwrap(),
+        )
+        .map_err(|_| PasetoError::CryptoError)?;
+        let c = c.to_be_bytes();
 
         let k = sha2::Sha384::digest(&c);
 
-        let mut mac =
+        let mut mac1 =
             hmac::Hmac::<sha2::Sha384>::new_from_slice(&k[..]).expect("hmac accepts all key sizes");
-        mac.update(b"\x01k1.seal.");
-        mac.update(r.as_bytes());
-        let (ek, n) = mac.finalize_reset().into_bytes().split();
+        mac1.update(b"\x01k1.seal.");
+        mac1.update(r.as_bytes());
+        let (ek, n) = mac1.finalize().into_bytes().split::<U32>();
 
-        mac.update(b"\x02k1.seal.");
-        mac.update(r.as_bytes());
-        let ak = mac.finalize().into_bytes();
+        let mut mac2 =
+            hmac::Hmac::<sha2::Sha384>::new_from_slice(&k[..]).expect("hmac accepts all key sizes");
+        mac2.update(b"\x02k1.seal.");
+        mac2.update(r.as_bytes());
+        let ak = mac2.finalize().into_bytes();
 
         let mut edk = key.0;
         ctr::Ctr64BE::<aes::Aes256>::new(&ek, &n).apply_keystream(&mut edk);
@@ -140,35 +146,35 @@ impl PkeUnsealingVersion for V1 {
         let c: &[u8] = &*c;
         let edk: &mut [u8; 32] = edk.try_into().map_err(|_| PasetoError::InvalidKey)?;
 
-        let r = rsa_decrypt_and_check::<rsa::rand_core::OsRng>(
+        let r = rsa_decrypt_and_check(
             &unsealing_key.0,
-            None,
-            &BigUint::from_bytes_be(c),
+            None::<&mut getrandom::SysRng>,
+            &BoxedUint::from_be_slice(c, c.len() as u32 * 8).unwrap(),
         )
-        .map_err(|_| PasetoError::CryptoError)?
-        .to_bytes_be();
+        .map_err(|_| PasetoError::CryptoError)?;
+        let r = r.to_be_bytes();
 
         let k = sha2::Sha384::digest(c);
 
-        let mut mac =
+        let mut mac2 =
             hmac::Hmac::<sha2::Sha384>::new_from_slice(&k[..]).expect("hmac accepts all key sizes");
-
-        mac.update(b"\x02k1.seal.");
-        mac.update(r.as_bytes());
-        let ak = mac.finalize_reset().into_bytes();
+        mac2.update(b"\x02k1.seal.");
+        mac2.update(r.as_bytes());
+        let ak = mac2.finalize().into_bytes();
 
         let mut t2 = hmac::Hmac::<sha2::Sha384>::new_from_slice(&ak).unwrap();
         t2.update(b"k1.seal.");
         t2.update(c);
         t2.update(edk);
 
-        // step 6: Compare t2 with t, using a constant-time compare function. If it does not match, abort.
         t2.verify((&*tag).into())
             .map_err(|_| PasetoError::CryptoError)?;
 
-        mac.update(b"\x01k1.seal.");
-        mac.update(r.as_bytes());
-        let (ek, n) = mac.finalize().into_bytes().split();
+        let mut mac1 =
+            hmac::Hmac::<sha2::Sha384>::new_from_slice(&k[..]).expect("hmac accepts all key sizes");
+        mac1.update(b"\x01k1.seal.");
+        mac1.update(r.as_bytes());
+        let (ek, n) = mac1.finalize().into_bytes().split::<U32>();
 
         ctr::Ctr64BE::<aes::Aes256>::new(&ek, &n).apply_keystream(edk);
 

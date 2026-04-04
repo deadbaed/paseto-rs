@@ -4,8 +4,8 @@ use blake2::Blake2bMac;
 use chacha20::XChaCha20;
 use cipher::StreamCipher;
 use digest::Mac;
-use generic_array::GenericArray;
-use generic_array::typenum::U32;
+use hybrid_array::Array;
+use hybrid_array::sizes::U32;
 use paseto_core::PasetoError;
 use paseto_core::paserk::PwWrapVersion;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, big_endian};
@@ -14,6 +14,7 @@ use super::V4;
 
 fn wrap_keys(pass: &[u8], prefix: &Prefix) -> Result<(XChaCha20, Blake2bMac<U32>), PasetoError> {
     use cipher::KeyIvInit;
+    use digest::KeyInit;
 
     let mut key = [0u8; 32];
     prefix
@@ -141,7 +142,7 @@ impl PwWrapVersion for V4 {
     }
 }
 
-fn kdf(key: &[u8], sep: u8) -> GenericArray<u8, U32> {
+fn kdf(key: &[u8], sep: u8) -> Array<u8, U32> {
     use digest::Digest;
 
     let mut mac = blake2::Blake2b::<U32>::default();

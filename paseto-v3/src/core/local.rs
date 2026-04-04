@@ -3,10 +3,10 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use cipher::StreamCipher;
-use generic_array::sequence::Split;
-use generic_array::typenum::U48;
-use generic_array::{ArrayLength, GenericArray};
 use hmac::Mac;
+use hybrid_array::Array;
+use hybrid_array::ArraySize;
+use hybrid_array::sizes::{U32, U48};
 use paseto_core::PasetoError;
 use paseto_core::key::HasKey;
 use paseto_core::pae::{WriteBytes, pre_auth_encode};
@@ -41,10 +41,10 @@ impl HasKey<Local> for V3 {
 impl LocalKey {
     fn keys(&self, nonce: &[u8; 32]) -> (ctr::Ctr64BE<aes::Aes256>, hmac::Hmac<sha2::Sha384>) {
         use cipher::KeyIvInit;
-        use digest::Mac;
+        use digest::KeyInit;
 
-        let (ek, n2) = kdf::<U48>(&self.0, b"paseto-encryption-key", nonce).split();
-        let ak: GenericArray<u8, U48> = kdf(&self.0, b"paseto-auth-key-for-aead", nonce);
+        let (ek, n2) = kdf::<U48>(&self.0, b"paseto-encryption-key", nonce).split::<U32>();
+        let ak: Array<u8, U48> = kdf(&self.0, b"paseto-auth-key-for-aead", nonce);
 
         let cipher = ctr::Ctr64BE::<aes::Aes256>::new(&ek, &n2);
         let mac = hmac::Hmac::new_from_slice(&ak).expect("key should be valid");
@@ -124,13 +124,13 @@ impl paseto_core::version::UnsealingVersion<Local> for V3 {
     }
 }
 
-fn kdf<O>(key: &[u8], sep: &'static [u8], nonce: &[u8]) -> GenericArray<u8, O>
+fn kdf<O>(key: &[u8], sep: &'static [u8], nonce: &[u8]) -> Array<u8, O>
 where
-    O: ArrayLength<u8>,
+    O: ArraySize,
 {
-    let mut output = GenericArray::<u8, O>::default();
+    let mut output = Array::<u8, O>::default();
     hkdf::Hkdf::<sha2::Sha384>::new(None, key)
-        .expand_multi_info(&[sep, nonce], &mut output)
+        .expand_multi_info(&[sep, nonce], output.as_mut_slice())
         .unwrap();
     output
 }

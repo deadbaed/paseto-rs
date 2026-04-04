@@ -3,10 +3,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use cipher::StreamCipher;
-use generic_array::GenericArray;
-use generic_array::sequence::Split;
-use generic_array::typenum::{U16, U32};
 use hmac::Mac;
+use hybrid_array::Array;
+use hybrid_array::sizes::{U16, U32};
 use paseto_core::PasetoError;
 use paseto_core::key::HasKey;
 use paseto_core::pae::{WriteBytes, pre_auth_encode};
@@ -41,10 +40,10 @@ impl HasKey<Local> for V1 {
 impl LocalKey {
     fn keys(&self, nonce: &[u8; 32]) -> (ctr::Ctr64BE<aes::Aes256>, hmac::Hmac<sha2::Sha384>) {
         use cipher::KeyIvInit;
-        use digest::Mac;
+        use digest::KeyInit;
 
-        let nonce: &GenericArray<u8, U32> = nonce.into();
-        let (n1, n2) = nonce.split();
+        let nonce: &Array<u8, U32> = nonce.into();
+        let (n1, n2) = nonce.split_ref::<U16>();
 
         let ek = kdf(&self.0, b"paseto-encryption-key", n1);
         let ak = kdf(&self.0, b"paseto-auth-key-for-aead", n1);
@@ -92,7 +91,7 @@ impl paseto_core::version::SealingVersion<Local> for V1 {
             .ok_or(PasetoError::InvalidToken)?;
 
         let mut n: hmac::Hmac<sha2::Sha384> =
-            digest::Mac::new_from_slice(nonce).expect("all sized keys are valid with hmac");
+            digest::KeyInit::new_from_slice(nonce).expect("all sized keys are valid with hmac");
         n.update(ciphertext);
         *nonce = n.finalize().into_bytes()[0..32]
             .try_into()
@@ -142,10 +141,10 @@ impl paseto_core::version::UnsealingVersion<Local> for V1 {
     }
 }
 
-fn kdf(key: &[u8], sep: &'static [u8], nonce: &GenericArray<u8, U16>) -> GenericArray<u8, U32> {
-    let mut output = GenericArray::<u8, U32>::default();
-    hkdf::Hkdf::<sha2::Sha384>::new(Some(nonce), key)
-        .expand(sep, &mut output)
+fn kdf(key: &[u8], sep: &'static [u8], nonce: &Array<u8, U16>) -> Array<u8, U32> {
+    let mut output = Array::<u8, U32>::default();
+    hkdf::Hkdf::<sha2::Sha384>::new(Some(nonce.as_slice()), key)
+        .expand(sep, output.as_mut_slice())
         .unwrap();
     output
 }

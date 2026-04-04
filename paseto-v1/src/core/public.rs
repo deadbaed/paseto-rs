@@ -2,14 +2,11 @@ use alloc::boxed::Box;
 #[cfg(feature = "signing")]
 use alloc::vec::Vec;
 
-use digest::Digest;
 use paseto_core::PasetoError;
 use paseto_core::key::HasKey;
 use paseto_core::pae::{WriteBytes, pre_auth_encode};
 use paseto_core::version::Public;
 use rsa::pss::Signature;
-#[cfg(feature = "signing")]
-use rsa::rand_core::OsRng;
 use rsa::traits::PublicKeyParts;
 
 #[cfg(feature = "signing")]
@@ -69,7 +66,7 @@ impl HasKey<paseto_core::version::Secret> for V1 {
     fn encode(key: &SecretKey) -> Box<[u8]> {
         use rsa::pkcs1::EncodeRsaPrivateKey;
 
-        key.0
+        AsRef::<rsa::RsaPrivateKey>::as_ref(&key.0)
             .to_pkcs1_der()
             .expect("encoding to pkcs1 der should succeed")
             .as_bytes()
@@ -81,9 +78,8 @@ impl HasKey<paseto_core::version::Secret> for V1 {
 #[cfg(feature = "signing")]
 impl SecretKey {
     pub(crate) fn random() -> Result<Self, PasetoError> {
-        use rsa::rand_core::OsRng;
-
-        rsa::pss::SigningKey::random(&mut OsRng, 2048)
+        let mut rng = rsa::rand_core::UnwrapErr(getrandom::SysRng);
+        rsa::pss::SigningKey::random(&mut rng, 2048)
             .map_err(|_| PasetoError::InvalidKey)
             .map(Self)
     }
@@ -118,10 +114,15 @@ impl paseto_core::version::SealingVersion<Public> for V1 {
             return Err(PasetoError::ClaimsError);
         }
 
-        let digest = preauth_public(encoding, &payload, footer);
         let signature: Box<[u8]> = key
             .0
-            .try_sign_digest_with_rng(&mut OsRng, digest)
+            .try_sign_digest_with_rng(
+                &mut rsa::rand_core::UnwrapErr(getrandom::SysRng),
+                |d: &mut sha2::Sha384| {
+                    update_preauth_public(d, encoding, &payload, footer);
+                    Ok(())
+                },
+            )
             .map_err(|_| PasetoError::CryptoError)?
             .into();
 
@@ -150,23 +151,35 @@ impl paseto_core::version::UnsealingVersion<Public> for V1 {
             .ok_or(PasetoError::InvalidToken)?;
 
         let signature = Signature::try_from(&tag[..]).map_err(|_| PasetoError::InvalidToken)?;
-        let digest = preauth_public(encoding, cleartext, footer);
-        DigestVerifier::<sha2::Sha384, Signature>::verify_digest(&key.0, digest, &signature)
-            .map_err(|_| PasetoError::CryptoError)?;
+        DigestVerifier::<sha2::Sha384, Signature>::verify_digest(
+            &key.0,
+            |d: &mut sha2::Sha384| {
+                update_preauth_public(d, encoding, cleartext, footer);
+                Ok(())
+            },
+            &signature,
+        )
+        .map_err(|_| PasetoError::CryptoError)?;
 
         Ok(cleartext)
     }
 }
-fn preauth_public(encoding: &'static str, cleartext: &[u8], footer: &[u8]) -> sha2::Sha384 {
+fn update_preauth_public(
+    digest: &mut sha2::Sha384,
+    encoding: &'static str,
+    cleartext: &[u8],
+    footer: &[u8],
+) {
     use paseto_core::key::KeyType;
-    struct Context(sha2::Sha384);
-    impl WriteBytes for Context {
+
+    struct Context<'a>(&'a mut sha2::Sha384);
+    impl WriteBytes for Context<'_> {
         fn write(&mut self, slice: &[u8]) {
-            self.0.update(slice);
+            digest::Update::update(self.0, slice);
         }
     }
 
-    let mut ctx = Context(sha2::Sha384::new());
+    let mut ctx = Context(digest);
     pre_auth_encode(
         [
             &[
@@ -179,5 +192,4 @@ fn preauth_public(encoding: &'static str, cleartext: &[u8], footer: &[u8]) -> sh
         ],
         &mut ctx,
     );
-    ctx.0
 }

@@ -61,10 +61,9 @@ impl paseto_core::version::SealingVersion<Local> for V2 {
         footer: &[u8],
         aad: &[u8],
     ) -> Result<Vec<u8>, PasetoError> {
-        use chacha20poly1305::aead::AeadMutInPlace;
+        use chacha20poly1305::aead::AeadInOut;
         use cipher::KeyInit;
-        use digest::Mac;
-        use generic_array::typenum::U24;
+        use hybrid_array::sizes::U24;
 
         if !aad.is_empty() {
             return Err(PasetoError::ClaimsError);
@@ -75,15 +74,15 @@ impl paseto_core::version::SealingVersion<Local> for V2 {
             .ok_or(PasetoError::CryptoError)?;
 
         let mut n: blake2::Blake2bMac<U24> =
-            digest::Mac::new_from_slice(nonce).expect("24 bytes is less than the 64 bytes max");
-        n.update(ciphertext);
-        *nonce = n.finalize().into_bytes().into();
+            digest::KeyInit::new_from_slice(nonce).expect("24 bytes is less than the 64 bytes max");
+        digest::Mac::update(&mut n, ciphertext);
+        *nonce = digest::Mac::finalize(n).into_bytes().into();
 
         let nonce: &[u8; 24] = nonce;
 
         let aad = preauth_local(encoding, nonce, footer);
         let tag = XChaCha20Poly1305::new((&key.0).into())
-            .encrypt_in_place_detached(nonce.into(), &aad, ciphertext)
+            .encrypt_inout_detached(nonce.into(), &aad, ciphertext.into())
             .map_err(|_| PasetoError::CryptoError)?;
 
         payload.extend_from_slice(&tag);
@@ -101,7 +100,7 @@ impl paseto_core::version::UnsealingVersion<Local> for V2 {
         footer: &[u8],
         aad: &[u8],
     ) -> Result<&'a [u8], PasetoError> {
-        use chacha20poly1305::aead::AeadMutInPlace;
+        use chacha20poly1305::aead::AeadInOut;
         use cipher::KeyInit;
 
         if !aad.is_empty() {
@@ -119,7 +118,7 @@ impl paseto_core::version::UnsealingVersion<Local> for V2 {
 
         let aad = preauth_local(encoding, nonce, footer);
         XChaCha20Poly1305::new((&key.0).into())
-            .decrypt_in_place_detached(nonce.into(), &aad, ciphertext, tag.into())
+            .decrypt_inout_detached(nonce.into(), &aad, ciphertext.into(), tag.into())
             .map_err(|_| PasetoError::CryptoError)?;
 
         Ok(ciphertext)

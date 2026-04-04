@@ -2,9 +2,8 @@ use alloc::vec::Vec;
 
 use cipher::StreamCipher;
 use digest::Mac;
-use generic_array::GenericArray;
-use generic_array::sequence::Split;
-use generic_array::typenum::U48;
+use hybrid_array::Array;
+use hybrid_array::sizes::{U32, U48};
 use paseto_core::PasetoError;
 use paseto_core::paserk::PwWrapVersion;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, big_endian};
@@ -16,6 +15,7 @@ fn wrap_keys(
     prefix: &Prefix,
 ) -> (ctr::Ctr64BE<aes::Aes256>, hmac::Hmac<sha2::Sha384>) {
     use cipher::KeyIvInit;
+    use digest::KeyInit;
 
     let key = pbkdf2::pbkdf2_array::<hmac::Hmac<sha2::Sha384>, 32>(
         pass,
@@ -24,7 +24,7 @@ fn wrap_keys(
     )
     .expect("HMAC accepts all password length inputs");
 
-    let (ek, _) = kdf(&key, 0xFF).split();
+    let (ek, _) = kdf(&key, 0xFF).split::<U32>();
     let ak = kdf(&key, 0xFE);
 
     let cipher = ctr::Ctr64BE::<aes::Aes256>::new(&ek, (&prefix.nonce).into());
@@ -115,7 +115,7 @@ impl PwWrapVersion for V1 {
     }
 }
 
-fn kdf(key: &[u8], sep: u8) -> GenericArray<u8, U48> {
+fn kdf(key: &[u8], sep: u8) -> Array<u8, U48> {
     use digest::Digest;
 
     let mut mac = sha2::Sha384::default();

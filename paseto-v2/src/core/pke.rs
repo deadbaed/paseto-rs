@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use cipher::StreamCipher;
 use curve25519_dalek::EdwardsPoint;
 use digest::Mac;
-use generic_array::typenum::U32;
+use hybrid_array::sizes::U32;
 use paseto_core::PasetoError;
 use paseto_core::key::HasKey;
 use paseto_core::paserk::{PkeSealingVersion, PkeUnsealingVersion};
@@ -37,7 +37,7 @@ impl PkeSealingVersion for V2 {
         use cipher::KeyIvInit;
         use curve25519_dalek::edwards::CompressedEdwardsY;
         use curve25519_dalek::scalar::{Scalar, clamp_integer};
-        use digest::Digest;
+        use digest::{Digest, KeyInit};
 
         // Given a plaintext data key (pdk), and an Ed25519 public key (pk).
         let pk = CompressedEdwardsY(*sealing_key.0.as_bytes());
@@ -98,7 +98,7 @@ impl PkeUnsealingVersion for V2 {
         mut key_data: Box<[u8]>,
     ) -> Result<LocalKey, PasetoError> {
         use cipher::KeyIvInit;
-        use digest::Digest;
+        use digest::{Digest, KeyInit};
 
         let (tag, key_data) = key_data
             .split_first_chunk_mut::<32>()

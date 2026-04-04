@@ -4,9 +4,8 @@ use blake2::Blake2bMac;
 use chacha20::XChaCha20;
 use cipher::StreamCipher;
 use digest::Mac;
-use generic_array::GenericArray;
-use generic_array::sequence::Split;
-use generic_array::typenum::{U32, U56};
+use hybrid_array::Array;
+use hybrid_array::sizes::{U32, U56};
 use paseto_core::PasetoError;
 use paseto_core::paserk::PieWrapVersion;
 
@@ -15,10 +14,10 @@ use super::{LocalKey, V2};
 impl LocalKey {
     fn wrap_keys(&self, nonce: &[u8; 32]) -> (XChaCha20, Blake2bMac<U32>) {
         use cipher::KeyIvInit;
-        use digest::Mac;
+        use digest::KeyInit;
 
-        let (ek, n2) = kdf::<U56>(&self.0, &[0x80], nonce).split();
-        let ak: GenericArray<u8, U32> = kdf(&self.0, &[0x81], nonce);
+        let (ek, n2) = kdf::<U56>(&self.0, &[0x80], nonce).split::<U32>();
+        let ak: Array<u8, U32> = kdf(&self.0, &[0x81], nonce);
 
         let cipher = XChaCha20::new(&ek, &n2);
         let mac = blake2::Blake2bMac::new_from_slice(&ak).expect("key should be valid");
@@ -80,13 +79,15 @@ fn auth(
     mac.update(ciphertext);
 }
 
-fn kdf<O>(key: &[u8], sep: &'static [u8], nonce: &[u8]) -> generic_array::GenericArray<u8, O>
+fn kdf<O>(key: &[u8], sep: &'static [u8], nonce: &[u8]) -> hybrid_array::Array<u8, O>
 where
-    O: generic_array::ArrayLength<u8>
-        + generic_array::typenum::IsLessOrEqual<generic_array::typenum::U64>,
-    generic_array::typenum::LeEq<O, generic_array::typenum::U64>: generic_array::typenum::NonZero,
+    O: hybrid_array::ArraySize
+        + blake2::digest::typenum::IsLessOrEqual<
+            hybrid_array::sizes::U64,
+            Output = blake2::digest::typenum::True,
+        >,
 {
-    use digest::Mac;
+    use digest::{KeyInit, Mac};
 
     let mut mac = blake2::Blake2bMac::<O>::new_from_slice(key).expect("key should be valid");
     mac.update(sep);

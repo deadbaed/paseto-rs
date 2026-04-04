@@ -2,8 +2,8 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use cipher::StreamCipher;
-use generic_array::sequence::Split;
 use hmac::Mac;
+use hybrid_array::sizes::U32;
 use paseto_core::PasetoError;
 use paseto_core::key::HasKey;
 use paseto_core::paserk::{PkeSealingVersion, PkeUnsealingVersion};
@@ -35,14 +35,14 @@ impl HasKey<PkeSecret> for V3 {
 impl PkeSealingVersion for V3 {
     fn seal_key(sealing_key: &PublicKey, key: LocalKey) -> Result<Box<[u8]>, PasetoError> {
         use cipher::KeyIvInit;
-        use p384::EncodedPoint;
+        use p384::Sec1Point;
         use p384::ecdh::diffie_hellman;
-        use p384::elliptic_curve::sec1::ToEncodedPoint;
+        use p384::elliptic_curve::sec1::ToSec1Point;
 
-        let pk = sealing_key.0.to_encoded_point(true);
+        let pk = sealing_key.0.to_sec1_point(true);
 
         let esk = p384::SecretKey::from(SecretKey::random()?.0);
-        let epk: EncodedPoint = esk.public_key().to_encoded_point(true);
+        let epk: Sec1Point = esk.public_key().to_sec1_point(true);
 
         let xk = diffie_hellman(esk.to_nonzero_scalar(), sealing_key.0.as_affine());
 
@@ -51,7 +51,7 @@ impl PkeSealingVersion for V3 {
         ek.update(xk.raw_secret_bytes());
         ek.update(epk);
         ek.update(pk.as_bytes());
-        let (ek, n) = ek.finalize().split();
+        let (ek, n) = ek.finalize().split::<U32>();
 
         let mut ak = sha2::Sha384::new();
         ak.update(b"\x02k3.seal.");
@@ -63,7 +63,7 @@ impl PkeSealingVersion for V3 {
         let mut edk = key.0;
         ctr::Ctr64BE::<aes::Aes256>::new(&ek, &n).apply_keystream(&mut edk);
 
-        let mut tag = hmac::Hmac::<sha2::Sha384>::new_from_slice(&ak).unwrap();
+        let mut tag = <hmac::Hmac<sha2::Sha384> as digest::KeyInit>::new_from_slice(&ak).unwrap();
         tag.update(b"k3.seal.");
         tag.update(epk.as_bytes());
         tag.update(&edk);
@@ -85,7 +85,7 @@ impl PkeUnsealingVersion for V3 {
     ) -> Result<LocalKey, PasetoError> {
         use cipher::KeyIvInit;
         use p384::ecdh::diffie_hellman;
-        use p384::{AffinePoint, EncodedPoint};
+        use p384::{AffinePoint, Sec1Point};
 
         let (tag, key_data) = key_data
             .split_first_chunk_mut::<48>()
@@ -99,10 +99,10 @@ impl PkeUnsealingVersion for V3 {
 
         let sk = p384::SecretKey::from(&unsealing_key.0);
 
-        let pk: EncodedPoint = sk.public_key().into();
-        let pk = pk.compress();
+        use p384::elliptic_curve::sec1::ToSec1Point;
+        let pk = sk.public_key().to_sec1_point(true);
 
-        let epk_point = EncodedPoint::from_bytes(epk).map_err(|_| PasetoError::CryptoError)?;
+        let epk_point = Sec1Point::from_bytes(epk).map_err(|_| PasetoError::CryptoError)?;
         let epk_point = AffinePoint::try_from(&epk_point).map_err(|_| PasetoError::CryptoError)?;
 
         let xk = diffie_hellman(sk.to_nonzero_scalar(), epk_point);
@@ -114,7 +114,7 @@ impl PkeUnsealingVersion for V3 {
         ak.update(pk.as_bytes());
         let ak = ak.finalize();
 
-        let mut t2 = hmac::Hmac::<sha2::Sha384>::new_from_slice(&ak).unwrap();
+        let mut t2 = <hmac::Hmac<sha2::Sha384> as digest::KeyInit>::new_from_slice(&ak).unwrap();
         t2.update(b"k3.seal.");
         t2.update(epk);
         t2.update(edk);
@@ -128,7 +128,7 @@ impl PkeUnsealingVersion for V3 {
         ek.update(xk.raw_secret_bytes());
         ek.update(epk);
         ek.update(pk.as_bytes());
-        let (ek, n) = ek.finalize().split();
+        let (ek, n) = ek.finalize().split::<U32>();
 
         ctr::Ctr64BE::<aes::Aes256>::new(&ek, &n).apply_keystream(edk);
 

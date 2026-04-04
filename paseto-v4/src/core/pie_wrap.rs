@@ -4,9 +4,8 @@ use blake2::Blake2bMac;
 use chacha20::XChaCha20;
 use cipher::StreamCipher;
 use digest::Mac;
-use generic_array::GenericArray;
-use generic_array::sequence::Split;
-use generic_array::typenum::{U32, U56};
+use hybrid_array::Array;
+use hybrid_array::sizes::{U32, U56};
 use paseto_core::PasetoError;
 use paseto_core::paserk::PieWrapVersion;
 
@@ -15,10 +14,10 @@ use super::{LocalKey, V4, kdf};
 impl LocalKey {
     fn wrap_keys(&self, nonce: &[u8; 32]) -> (XChaCha20, Blake2bMac<U32>) {
         use cipher::KeyIvInit;
-        use digest::Mac;
+        use digest::KeyInit;
 
-        let (ek, n2) = kdf::<U56>(&self.0, &[0x80], nonce).split();
-        let ak: GenericArray<u8, U32> = kdf(&self.0, &[0x81], nonce);
+        let (ek, n2) = kdf::<U56>(&self.0, &[0x80], nonce).split::<U32>();
+        let ak: Array<u8, U32> = kdf(&self.0, &[0x81], nonce);
 
         let cipher = XChaCha20::new(&ek, &n2);
         let mac = blake2::Blake2bMac::new_from_slice(&ak).expect("key should be valid");

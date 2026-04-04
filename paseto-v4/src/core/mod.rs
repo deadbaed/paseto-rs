@@ -56,13 +56,15 @@ impl<M: digest::Update> paseto_core::pae::WriteBytes for PreAuthEncodeDigest<'_,
 }
 
 #[cfg(feature = "decrypting")]
-fn kdf<O>(key: &[u8], sep: &'static [u8], nonce: &[u8]) -> generic_array::GenericArray<u8, O>
+fn kdf<O>(key: &[u8], sep: &'static [u8], nonce: &[u8]) -> hybrid_array::Array<u8, O>
 where
-    O: generic_array::ArrayLength<u8>
-        + generic_array::typenum::IsLessOrEqual<generic_array::typenum::U64>,
-    generic_array::typenum::LeEq<O, generic_array::typenum::U64>: generic_array::typenum::NonZero,
+    O: hybrid_array::ArraySize
+        + blake2::digest::typenum::IsLessOrEqual<
+            hybrid_array::sizes::U64,
+            Output = blake2::digest::typenum::True,
+        >,
 {
-    use digest::Mac;
+    use digest::{KeyInit, Mac};
 
     let mut mac = blake2::Blake2bMac::<O>::new_from_slice(key).expect("key should be valid");
     mac.update(sep);

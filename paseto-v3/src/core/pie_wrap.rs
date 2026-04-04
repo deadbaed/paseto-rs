@@ -2,9 +2,8 @@ use alloc::vec::Vec;
 
 use cipher::StreamCipher;
 use digest::Mac;
-use generic_array::GenericArray;
-use generic_array::sequence::Split;
-use generic_array::typenum::U48;
+use hybrid_array::Array;
+use hybrid_array::sizes::{U32, U48};
 use paseto_core::PasetoError;
 use paseto_core::paserk::PieWrapVersion;
 
@@ -13,9 +12,9 @@ use super::{LocalKey, V3};
 impl LocalKey {
     fn wrap_keys(&self, nonce: &[u8; 32]) -> (ctr::Ctr64BE<aes::Aes256>, hmac::Hmac<sha2::Sha384>) {
         use cipher::KeyIvInit;
-        use digest::Mac;
+        use digest::KeyInit;
 
-        let (ek, n2) = kdf(&self.0, 0x80, nonce).split();
+        let (ek, n2) = kdf(&self.0, 0x80, nonce).split::<U32>();
         let ak = kdf(&self.0, 0x81, nonce);
 
         let cipher = ctr::Ctr64BE::<aes::Aes256>::new(&ek, &n2);
@@ -69,7 +68,8 @@ impl PieWrapVersion for V3 {
     }
 }
 
-fn kdf(key: &[u8], sep: u8, nonce: &[u8]) -> GenericArray<u8, U48> {
+fn kdf(key: &[u8], sep: u8, nonce: &[u8]) -> Array<u8, U48> {
+    use digest::KeyInit;
     let mut mac = hmac::Hmac::<sha2::Sha384>::new_from_slice(key).expect("key should be valid");
     mac.update(&[sep]);
     mac.update(nonce);
