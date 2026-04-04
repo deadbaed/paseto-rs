@@ -1,343 +1,124 @@
-#![allow(unsafe_code)]
-
-mod ptr;
-
-use std::ptr::{null, null_mut};
-
+use aws_lc_rs::agreement::{self, ECDH_P384};
+use aws_lc_rs::digest;
+use aws_lc_rs::encoding::AsBigEndian;
+use aws_lc_rs::signature::{
+    self, ECDSA_P384_SHA384_FIXED, ECDSA_P384_SHA384_FIXED_SIGNING, EcdsaKeyPair,
+};
 use paseto_core::PasetoError;
 
-use crate::lc::ptr::{ConstPointer, DetachableLcPtr, LcPtr};
-
-#[cfg(feature = "fips")]
-extern crate aws_lc_fips_sys as aws_lc;
-#[cfg(not(feature = "fips"))]
-extern crate aws_lc_sys as aws_lc;
-
-use aws_lc::{
-    BN_bin2bn, BN_bn2bin, BN_num_bytes, EC_GROUP, EC_KEY, EC_KEY_get0_private_key,
-    EC_KEY_get0_public_key, EC_KEY_new, EC_KEY_set_group, EC_KEY_set_private_key,
-    EC_KEY_set_public_key, EC_POINT, EC_POINT_mul, EC_POINT_new, EC_POINT_oct2point,
-    EC_POINT_point2oct, EC_group_p384, ECDH_compute_key, ECDSA_SIG, ECDSA_SIG_from_bytes,
-    ECDSA_SIG_get0, ECDSA_SIG_new, ECDSA_SIG_set0, ECDSA_SIG_to_bytes, ECDSA_sign, ECDSA_size,
-    ECDSA_verify,
-};
-
+#[derive(Clone)]
 pub struct SigningKey {
-    key: LcPtr<EC_KEY>,
+    scalar: [u8; 48],
+    compressed_pubkey: [u8; 49],
+    uncompressed_pubkey: Vec<u8>,
 }
-
-impl Clone for SigningKey {
-    fn clone(&self) -> Self {
-        let g = unsafe { ConstPointer::new_static(EC_group_p384()).unwrap() };
-
-        let key = self.key.as_const();
-        let pk = key
-            .project(|k| unsafe { EC_KEY_get0_public_key(**k) })
-            .unwrap();
-        let bn = key
-            .project(|k| unsafe { EC_KEY_get0_private_key(**k) })
-            .unwrap();
-
-        let mut key = LcPtr::new(unsafe { EC_KEY_new() }).unwrap();
-
-        assert!(
-            unsafe { EC_KEY_set_group(*key.as_mut(), *g) } == 1,
-            "unable to clone signing key"
-        );
-        assert!(
-            unsafe { EC_KEY_set_private_key(*key.as_mut(), *bn) } == 1,
-            "unable to clone signing key"
-        );
-        assert!(
-            unsafe { EC_KEY_set_public_key(*key.as_mut(), *pk) } == 1,
-            "unable to clone signing key"
-        );
-
-        Self { key }
-    }
-}
-
-unsafe impl Send for SigningKey {}
-unsafe impl Sync for SigningKey {}
 
 impl SigningKey {
-    #[inline]
     pub fn from_sec1_bytes(bytes: &[u8]) -> Result<Self, PasetoError> {
-        let g = unsafe { ConstPointer::new_static(EC_group_p384())? };
-
-        let bn = LcPtr::new(unsafe { BN_bin2bn(bytes.as_ptr(), bytes.len(), null_mut()) })
+        let ecdh_key = agreement::PrivateKey::from_private_key(&ECDH_P384, bytes)
             .map_err(|_| PasetoError::InvalidKey)?;
+        let pk = ecdh_key
+            .compute_public_key()
+            .map_err(|_| PasetoError::CryptoError)?;
+        let compressed: aws_lc_rs::encoding::EcPublicKeyCompressedBin =
+            pk.as_be_bytes().map_err(|_| PasetoError::CryptoError)?;
 
-        let mut pk = LcPtr::new(unsafe { EC_POINT_new(*g) })?;
-        if unsafe { EC_POINT_mul(*g, *pk.as_mut(), *bn.as_const(), null(), null(), null_mut()) }
-            != 1
-        {
-            return Err(PasetoError::CryptoError);
-        }
+        let mut scalar = [0u8; 48];
+        scalar.copy_from_slice(bytes);
 
-        let mut key = LcPtr::new(unsafe { EC_KEY_new() })?;
-
-        if unsafe { EC_KEY_set_group(*key.as_mut(), *g) } != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-        if unsafe { EC_KEY_set_private_key(*key.as_mut(), *bn.as_const()) } != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-        if unsafe { EC_KEY_set_public_key(*key.as_mut(), *pk.as_const()) } != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        Ok(Self { key })
+        Ok(Self {
+            scalar,
+            compressed_pubkey: compressed
+                .as_ref()
+                .try_into()
+                .map_err(|_| PasetoError::CryptoError)?,
+            uncompressed_pubkey: pk.as_ref().to_vec(),
+        })
     }
 
     pub fn encode(&self) -> [u8; 48] {
-        let key = self.key.as_const();
-        let key = key
-            .project(|k| unsafe { EC_KEY_get0_private_key(**k) })
-            .unwrap();
+        self.scalar
+    }
 
-        let key_len = unsafe { BN_num_bytes(*key) } as usize;
-        assert!(key_len <= 48, "invalid key_len");
-
-        let mut key_bytes = [0; 48];
-        assert!(
-            unsafe { BN_bn2bin(*key, key_bytes[48 - key_len..].as_mut_ptr()) } == key_len,
-            "invalid key_len"
-        );
-
-        key_bytes
+    fn ecdsa_key_pair(&self) -> Result<EcdsaKeyPair, PasetoError> {
+        EcdsaKeyPair::from_private_key_and_public_key(
+            &ECDSA_P384_SHA384_FIXED_SIGNING,
+            &self.scalar,
+            &self.uncompressed_pubkey,
+        )
+        .map_err(|_| PasetoError::CryptoError)
     }
 
     pub fn compressed_pub_key(&self) -> [u8; 49] {
-        let key = self.key.as_const();
-        let key = key
-            .project(|k| unsafe { EC_KEY_get0_public_key(**k) })
-            .unwrap();
-
-        compressed_pub_key(key)
+        self.compressed_pubkey
     }
 
     pub fn verifying_key(&self) -> VerifyingKey {
-        let key = self.key.as_const();
-        let p = key
-            .project(|k| unsafe { EC_KEY_get0_public_key(**k) })
-            .unwrap();
-
-        let g =
-            unsafe { ConstPointer::new_static(EC_group_p384()).expect("group should be valid") };
-
-        VerifyingKey::from_point(g, p).expect("pub_key point should be valid")
+        VerifyingKey::from_sec1_bytes(&self.compressed_pubkey)
+            .expect("compressed pubkey should be valid")
     }
 
-    #[inline]
-    pub fn sign(&self, digest: &[u8]) -> Result<Signature, PasetoError> {
-        let key = self.key.as_const();
-
-        if unsafe { ECDSA_size(*key) } != 104 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        let mut sig_len = 0;
-        let mut sig = [0; 104];
-        let res = unsafe {
-            ECDSA_sign(
-                0,
-                digest.as_ptr(),
-                digest.len(),
-                sig.as_mut_ptr(),
-                &raw mut sig_len,
-                *key,
-            )
-        };
-        if res != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        let sig = LcPtr::new(unsafe { ECDSA_SIG_from_bytes(sig.as_ptr(), sig_len as usize) })?;
-        Ok(Signature { sig })
+    pub fn sign(&self, digest: &digest::Digest) -> Result<[u8; 96], PasetoError> {
+        let key_pair = self.ecdsa_key_pair()?;
+        let sig = key_pair
+            .sign_digest(digest)
+            .map_err(|_| PasetoError::CryptoError)?;
+        sig.as_ref()
+            .try_into()
+            .map_err(|_| PasetoError::CryptoError)
     }
 
     pub fn diffie_hellman(&self, pubkey: &VerifyingKey) -> Result<[u8; 48], PasetoError> {
-        let mut out = [0; 48];
-
-        let pubkey = pubkey.key.as_const();
-        let pubkey = pubkey
-            .project(|k| unsafe { EC_KEY_get0_public_key(**k) })
-            .unwrap();
-
-        let res = unsafe {
-            ECDH_compute_key(
-                out.as_mut_ptr().cast(),
-                out.len(),
-                *pubkey,
-                *self.key.as_const(),
-                None,
-            )
-        };
-        if res != 48 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        Ok(out)
+        let ecdh_key = agreement::PrivateKey::from_private_key(&ECDH_P384, &self.scalar)
+            .map_err(|_| PasetoError::CryptoError)?;
+        let peer_pk = agreement::UnparsedPublicKey::new(&ECDH_P384, &pubkey.compressed_pubkey);
+        agreement::agree(&ecdh_key, &peer_pk, PasetoError::CryptoError, |shared| {
+            shared.try_into().map_err(|_| PasetoError::CryptoError)
+        })
     }
 }
 
-pub struct Signature {
-    sig: LcPtr<ECDSA_SIG>,
-}
-
-impl Signature {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PasetoError> {
-        if bytes.len() != 96 {
-            return Err(PasetoError::CryptoError);
-        }
-        let r = &bytes[0..48];
-        let s = &bytes[48..96];
-
-        let r = DetachableLcPtr::new(unsafe { BN_bin2bn(r.as_ptr(), r.len(), null_mut()) })?;
-        let s = DetachableLcPtr::new(unsafe { BN_bin2bn(s.as_ptr(), s.len(), null_mut()) })?;
-
-        let mut sig = LcPtr::new(unsafe { ECDSA_SIG_new() })?;
-        if unsafe { ECDSA_SIG_set0(*sig.as_mut(), *r, *s) } != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-        r.detach();
-        s.detach();
-
-        Ok(Signature { sig })
-    }
-
-    pub fn append_to_vec(&self, out: &mut Vec<u8>) -> Result<(), PasetoError> {
-        let sig = &self.sig;
-
-        let mut r = null();
-        let mut s = null();
-        unsafe { ECDSA_SIG_get0(*sig.as_const(), &raw mut r, &raw mut s) };
-
-        if unsafe { BN_num_bytes(r) } != 48 || unsafe { BN_num_bytes(s) } != 48 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        out.reserve(48 + 48);
-        let len = out.len();
-        let ptr = out.spare_capacity_mut().as_mut_ptr().cast();
-        if unsafe { BN_bn2bin(r, ptr) } != 48 {
-            return Err(PasetoError::CryptoError);
-        }
-        if unsafe { BN_bn2bin(s, ptr.add(48)) } != 48 {
-            return Err(PasetoError::CryptoError);
-        }
-        unsafe { out.set_len(len + 48 + 48) };
-
-        Ok(())
-    }
-}
-
+#[derive(Clone)]
 pub struct VerifyingKey {
-    key: LcPtr<EC_KEY>,
+    key: signature::ParsedPublicKey,
+    compressed_pubkey: [u8; 49],
 }
-
-impl Clone for VerifyingKey {
-    fn clone(&self) -> Self {
-        let g = unsafe { ConstPointer::new_static(EC_group_p384()).unwrap() };
-
-        let key = self.key.as_const();
-        let p = key
-            .project(|k| unsafe { EC_KEY_get0_public_key(**k) })
-            .unwrap();
-
-        Self::from_point(g, p).unwrap()
-    }
-}
-
-unsafe impl Send for VerifyingKey {}
-unsafe impl Sync for VerifyingKey {}
 
 impl VerifyingKey {
-    #[inline]
     pub fn from_sec1_bytes(b: &[u8]) -> Result<Self, PasetoError> {
-        let g = unsafe { ConstPointer::new_static(EC_group_p384())? };
+        let key = signature::ParsedPublicKey::new(&ECDSA_P384_SHA384_FIXED, b)
+            .map_err(|_| PasetoError::InvalidKey)?;
 
-        let mut p = LcPtr::new(unsafe { EC_POINT_new(*g) })?;
-        if unsafe { EC_POINT_oct2point(*g, *p.as_mut(), b.as_ptr(), b.len(), null_mut()) } != 1 {
-            return Err(PasetoError::InvalidKey);
-        }
+        let compressed = if b.len() == 49 {
+            b.try_into().map_err(|_| PasetoError::InvalidKey)?
+        } else {
+            compress_p384_point(b)?
+        };
 
-        Self::from_point(g, p.as_const())
-    }
-
-    #[inline]
-    fn from_point(
-        g: ConstPointer<'static, EC_GROUP>,
-        p: ConstPointer<'_, EC_POINT>,
-    ) -> Result<Self, PasetoError> {
-        let mut key = LcPtr::new(unsafe { EC_KEY_new() })?;
-
-        if unsafe { EC_KEY_set_group(*key.as_mut(), *g) } != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-        if unsafe { EC_KEY_set_public_key(*key.as_mut(), *p) } != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        Ok(Self { key })
+        Ok(Self {
+            key,
+            compressed_pubkey: compressed,
+        })
     }
 
     pub fn compressed_pub_key(&self) -> [u8; 49] {
-        let key = self.key.as_const();
-        let key = key
-            .project(|k| unsafe { EC_KEY_get0_public_key(**k) })
-            .unwrap();
-
-        compressed_pub_key(key)
+        self.compressed_pubkey
     }
 
-    #[inline]
-    pub fn verify(&self, digest: &[u8], signature: &Signature) -> Result<(), PasetoError> {
-        let mut sig_len = 0;
-        let mut sig = null_mut();
-        if unsafe { ECDSA_SIG_to_bytes(&raw mut sig, &raw mut sig_len, *signature.sig.as_const()) }
-            != 1
-        {
-            return Err(PasetoError::CryptoError);
-        }
-        let sig = LcPtr::new(sig)?;
-
-        let res = unsafe {
-            ECDSA_verify(
-                0,
-                digest.as_ptr(),
-                digest.len(),
-                *sig.as_const(),
-                sig_len,
-                *self.key.as_const(),
-            )
-        };
-
-        if res != 1 {
-            return Err(PasetoError::CryptoError);
-        }
-
-        Ok(())
+    pub fn verify(&self, digest: &digest::Digest, signature: &[u8]) -> Result<(), PasetoError> {
+        self.key
+            .verify_digest_sig(digest, signature)
+            .map_err(|_| PasetoError::CryptoError)
     }
 }
 
-pub fn compressed_pub_key(p: ConstPointer<EC_POINT>) -> [u8; 49] {
-    let g = unsafe { ConstPointer::new_static(EC_group_p384()).expect("group should be valid") };
-
-    let mut out = [0; 49];
-    let len = unsafe {
-        EC_POINT_point2oct(
-            *g,
-            *p,
-            aws_lc::point_conversion_form_t::POINT_CONVERSION_COMPRESSED,
-            out.as_mut_ptr(),
-            out.len(),
-            null_mut(),
-        )
-    };
-
-    assert!(len == 49, "compressed point should be 49 bytes");
-
-    out
+fn compress_p384_point(uncompressed: &[u8]) -> Result<[u8; 49], PasetoError> {
+    if uncompressed.len() != 97 || uncompressed[0] != 0x04 {
+        return Err(PasetoError::InvalidKey);
+    }
+    let mut out = [0u8; 49];
+    let y_last_byte = uncompressed[96];
+    out[0] = if y_last_byte & 1 == 0 { 0x02 } else { 0x03 };
+    out[1..].copy_from_slice(&uncompressed[1..49]);
+    Ok(out)
 }

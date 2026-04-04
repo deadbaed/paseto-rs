@@ -16,25 +16,20 @@ categories = [
 ]
 
 [features]
-default = ["dep:aws-lc-sys"]
-bindgen = ["aws-lc-sys?/bindgen", "aws-lc-fips-sys?/bindgen"]
-asan = ["aws-lc-sys?/asan", "aws-lc-fips-sys?/asan"]
-prebuilt-nasm = ["aws-lc-sys?/prebuilt-nasm"]
+default = []
 
 # require non-FIPS
-non-fips = ["dep:aws-lc-sys", "aws-lc-rs/non-fips"]
+non-fips = ["aws-lc-rs/non-fips"]
 
 # require FIPS
-fips = ["dep:aws-lc-fips-sys", "aws-lc-rs/fips"]
+fips = ["aws-lc-rs/fips"]
 
 [dependencies]
 paseto-core.workspace = true
 
 zerocopy = { version = "0.8", features = ["derive"] }
 
-aws-lc-rs = "1.14"
-aws-lc-sys = { version = "0.31", optional = true }
-aws-lc-fips-sys = { version = "0.13", optional = true }
+aws-lc-rs = "1.16"
 
 [dev-dependencies]
 paseto-json.workspace = true

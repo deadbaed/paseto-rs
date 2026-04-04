@@ -6,7 +6,7 @@ use paseto_core::pae::{WriteBytes, pre_auth_encode};
 use paseto_core::version::{Public, Secret};
 
 use super::{PublicKey, SecretKey, V3};
-use crate::lc::{Signature, SigningKey, VerifyingKey};
+use crate::lc::{SigningKey, VerifyingKey};
 
 impl HasKey<Public> for V3 {
     type Key = PublicKey;
@@ -70,8 +70,8 @@ impl paseto_core::version::SealingVersion<Public> for V3 {
         aad: &[u8],
     ) -> Result<Vec<u8>, PasetoError> {
         let digest = preauth_public(&key.0.compressed_pub_key(), encoding, &payload, footer, aad);
-        let signature = key.0.sign(digest.as_ref())?;
-        signature.append_to_vec(&mut payload)?;
+        let signature = key.0.sign(&digest)?;
+        payload.extend_from_slice(&signature);
 
         Ok(payload)
     }
@@ -91,7 +91,6 @@ impl paseto_core::version::UnsealingVersion<Public> for V3 {
         }
 
         let (cleartext, tag) = payload.split_at(len - 96);
-        let signature = Signature::from_bytes(tag).map_err(|_| PasetoError::InvalidToken)?;
         let digest = preauth_public(
             &key.0.compressed_pub_key(),
             encoding,
@@ -99,9 +98,7 @@ impl paseto_core::version::UnsealingVersion<Public> for V3 {
             footer,
             aad,
         );
-        key.0
-            .verify(digest.as_ref(), &signature)
-            .map_err(|_| PasetoError::CryptoError)?;
+        key.0.verify(&digest, tag)?;
 
         Ok(cleartext)
     }
