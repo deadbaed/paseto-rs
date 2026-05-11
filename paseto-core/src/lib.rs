@@ -32,7 +32,7 @@ pub mod version;
 use alloc::boxed::Box;
 use core::error::Error;
 
-/// Private key used for [`encryption`](crate::UnencryptedToken::encrypt) and [`decryptiom`](crate::EncryptedToken::decrypt)
+/// Private key used for [`encryption`](crate::UnencryptedToken::encrypt) and [`decryption`](crate::EncryptedToken::decrypt)
 pub type LocalKey<V> = key::Key<V, version::Local>;
 /// Public key used for signature [`verification`](crate::SignedToken::verify)
 pub type PublicKey<V> = key::Key<V, version::Public>;
