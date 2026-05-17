@@ -1,10 +1,30 @@
+use paseto_core::key::{HasKey, Key, KeyType};
+use paseto_core::paserk::KeyText;
 use paseto_core::validation::NoValidation;
-use paseto_core::version::{Local, Public, SealingVersion};
+use paseto_core::version::{Local, Public, SealingVersion, Version};
 use paseto_core::{
     EncryptedToken, LocalKey, PublicKey, SecretKey, SignedToken, UnencryptedToken, UnsignedToken,
 };
 use paseto_test::Bytes;
 use proptest::prelude::*;
+
+/// Re-decode a key's raw bytes under a (potentially different) version and
+/// key-type. Used to:
+/// - transfer keys between equivalent implementations (e.g. v3 <-> v3-aws-lc)
+/// - re-tag a signing key as its PKE counterpart (`Public` -> `PkePublic`)
+///   for versions where the byte layout is identical.
+fn reencode_key<VA, KA, VB, KB>(key: &Key<VA, KA>) -> Key<VB, KB>
+where
+    VA: HasKey<KA>,
+    VB: HasKey<KB> + Version,
+    KA: KeyType,
+    KB: KeyType,
+{
+    let raw = key.expose_key();
+    KeyText::<VB, KB>::from_raw_bytes(raw.as_raw_bytes())
+        .try_into()
+        .expect("caller guarantees raw byte layout matches target version/key-type")
+}
 
 fn local_roundtrip<V>(claims: Vec<u8>, footer: Vec<u8>, aad: Vec<u8>) -> Result<(), TestCaseError>
 where
@@ -456,4 +476,125 @@ tamper_test!(
     tamper_public_v4_sodium,
     public_tamper::<paseto_v4_sodium::core::V4>,
     aad
+);
+
+fn local_cross_impl<VA, VB>(
+    claims: Vec<u8>,
+    footer: Vec<u8>,
+    aad: Vec<u8>,
+) -> Result<(), TestCaseError>
+where
+    VA: SealingVersion<Local>,
+    VB: SealingVersion<Local>,
+{
+    let key_a = LocalKey::<VA>::random().unwrap();
+    let key_b: LocalKey<VB> = reencode_key(&key_a);
+
+    let token = UnencryptedToken::<VA, _>::new(Bytes(claims.clone()))
+        .with_footer(footer.clone())
+        .encrypt_with_aad(&key_a, &aad)
+        .unwrap();
+    let wire = token.to_string();
+
+    let parsed: EncryptedToken<VB, Bytes, Vec<u8>> = wire.parse().unwrap();
+    let decrypted = parsed
+        .decrypt_with_aad(&key_b, &aad, &NoValidation::dangerous_no_validation())
+        .unwrap();
+
+    prop_assert_eq!(decrypted.claims.0, claims);
+    prop_assert_eq!(decrypted.footer, footer);
+    Ok(())
+}
+
+fn public_cross_impl<VA, VB>(
+    claims: Vec<u8>,
+    footer: Vec<u8>,
+    aad: Vec<u8>,
+) -> Result<(), TestCaseError>
+where
+    VA: SealingVersion<Public>,
+    VB: SealingVersion<Public>,
+{
+    let secret_a = SecretKey::<VA>::random().unwrap();
+    let public_a = secret_a.public_key();
+    let public_b: PublicKey<VB> = reencode_key(&public_a);
+
+    let token = UnsignedToken::<VA, _>::new(Bytes(claims.clone()))
+        .with_footer(footer.clone())
+        .sign_with_aad(&secret_a, &aad)
+        .unwrap();
+    let wire = token.to_string();
+
+    let parsed: SignedToken<VB, Bytes, Vec<u8>> = wire.parse().unwrap();
+    let verified = parsed
+        .verify_with_aad(&public_b, &aad, &NoValidation::dangerous_no_validation())
+        .unwrap();
+
+    prop_assert_eq!(&verified.claims.0, &claims);
+    prop_assert_eq!(&verified.footer, &footer);
+
+    let secret_b: SecretKey<VB> = reencode_key(&secret_a);
+    let token_b = UnsignedToken::<VB, _>::new(Bytes(claims.clone()))
+        .with_footer(footer.clone())
+        .sign_with_aad(&secret_b, &aad)
+        .unwrap();
+    let wire_b = token_b.to_string();
+    let parsed_back: SignedToken<VA, Bytes, Vec<u8>> = wire_b.parse().unwrap();
+    let verified_back = parsed_back
+        .verify_with_aad(&public_a, &aad, &NoValidation::dangerous_no_validation())
+        .unwrap();
+    prop_assert_eq!(verified_back.claims.0, claims);
+    prop_assert_eq!(verified_back.footer, footer);
+
+    Ok(())
+}
+
+macro_rules! cross_impl_test {
+    ($name:ident, $body:expr) => {
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(64))]
+            #[test]
+            fn $name(
+                claims in prop::collection::vec(any::<u8>(), 0..256),
+                footer in prop::collection::vec(any::<u8>(), 0..64),
+                aad in prop::collection::vec(any::<u8>(), 0..64),
+            ) {
+                $body(claims, footer, aad)?;
+            }
+        }
+    };
+}
+
+cross_impl_test!(
+    cross_local_v3_to_aws_lc,
+    local_cross_impl::<paseto_v3::core::V3, paseto_v3_aws_lc::core::V3>
+);
+cross_impl_test!(
+    cross_local_aws_lc_to_v3,
+    local_cross_impl::<paseto_v3_aws_lc::core::V3, paseto_v3::core::V3>
+);
+cross_impl_test!(
+    cross_local_v4_to_sodium,
+    local_cross_impl::<paseto_v4::core::V4, paseto_v4_sodium::core::V4>
+);
+cross_impl_test!(
+    cross_local_sodium_to_v4,
+    local_cross_impl::<paseto_v4_sodium::core::V4, paseto_v4::core::V4>
+);
+
+cross_impl_test!(
+    cross_public_v3_to_aws_lc,
+    public_cross_impl::<paseto_v3::core::V3, paseto_v3_aws_lc::core::V3>
+);
+cross_impl_test!(
+    cross_public_aws_lc_to_v3,
+    public_cross_impl::<paseto_v3_aws_lc::core::V3, paseto_v3::core::V3>
+);
+cross_impl_test!(
+    cross_public_v4_to_sodium,
+    public_cross_impl::<paseto_v4::core::V4, paseto_v4_sodium::core::V4>
+);
+cross_impl_test!(
+    cross_public_sodium_to_v4,
+    public_cross_impl::<paseto_v4_sodium::core::V4, paseto_v4::core::V4>
 );
