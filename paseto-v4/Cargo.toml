@@ -40,7 +40,7 @@ getrandom = { version = "0.4", optional = true }
 zerocopy = { version = "0.8", features = ["derive"] }
 
 blake2 = { version = "0.11.0-rc.5", default-features = false, optional = true }
-chacha20 = { version = "0.10", default-features = false, optional = true }
+chacha20 = { version = "0.10", default-features = false, features = ["xchacha"], optional = true }
 ed25519-dalek = { version = "3.0.0-pre.6", features = ["hazmat"], default-features = false, optional = true }
 curve25519-dalek = { version = "5.0.0-pre.6", default-features = false, optional = true }
 argon2 = { version = "0.6.0-rc.8", default-features = false, features = ["alloc"], optional = true }
