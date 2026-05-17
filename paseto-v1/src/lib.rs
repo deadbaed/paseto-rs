@@ -65,6 +65,11 @@ pub type PublicKey = paseto_core::PublicKey<core::V1>;
 /// Private key used for token [`signing`](UnsignedToken::sign)
 pub type SecretKey = paseto_core::SecretKey<core::V1>;
 
+/// Public key used for [`sealing`](LocalKey::seal) a [`LocalKey`] for a recipient.
+pub type PkePublicKey = paseto_core::PkePublicKey<core::V1>;
+/// Private key used for [`unsealing`](SealedKey::unseal) a sealed [`LocalKey`].
+pub type PkeSecretKey = paseto_core::PkeSecretKey<core::V1>;
+
 /// A short ID for a key.
 pub type KeyId<K> = paseto_core::paserk::KeyId<core::V1, K>;
 /// A plaintext encoding of a key.

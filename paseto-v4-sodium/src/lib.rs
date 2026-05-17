@@ -70,6 +70,12 @@ pub type SecretKey = paseto_core::SecretKey<core::V4>;
 pub type KeyId<K> = paseto_core::paserk::KeyId<core::V4, K>;
 /// A plaintext encoding of a key.
 pub type KeyText<K> = paseto_core::paserk::KeyText<core::V4, K>;
+
+/// Public key used for [`sealing`](LocalKey::seal) a [`LocalKey`] for a recipient.
+pub type PkePublicKey = paseto_core::PkePublicKey<core::V4>;
+/// Private key used for [`unsealing`](SealedKey::unseal) a sealed [`LocalKey`].
+pub type PkeSecretKey = paseto_core::PkeSecretKey<core::V4>;
+
 /// An asymmetrically encrypted [`LocalKey`].
 pub type SealedKey = paseto_core::paserk::SealedKey<core::V4>;
 

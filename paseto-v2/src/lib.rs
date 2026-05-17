@@ -85,6 +85,13 @@ pub type KeyText<K> = paseto_core::paserk::KeyText<core::V2, K>;
 #[cfg(feature = "id")]
 pub type KeyId<K> = paseto_core::paserk::KeyId<core::V2, K>;
 
+/// Public key used for [`sealing`](LocalKey::seal) a [`LocalKey`] for a recipient.
+#[cfg(feature = "pke")]
+pub type PkePublicKey = paseto_core::PkePublicKey<core::V2>;
+/// Private key used for [`unsealing`](SealedKey::unseal) a sealed [`LocalKey`].
+#[cfg(feature = "pke")]
+pub type PkeSecretKey = paseto_core::PkeSecretKey<core::V2>;
+
 /// An asymmetrically encrypted [`LocalKey`].
 #[cfg(feature = "pke")]
 pub type SealedKey = paseto_core::paserk::SealedKey<core::V2>;

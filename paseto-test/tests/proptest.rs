@@ -4,7 +4,7 @@ use paseto_core::paserk::{
     PkeUnsealingVersion, SealedKey,
 };
 use paseto_core::validation::NoValidation;
-use paseto_core::version::{Local, PkePublic, PkeSecret, Public, SealingVersion, Secret, Version};
+use paseto_core::version::{Local, PkeSecret, Public, SealingVersion, Secret, Version};
 use paseto_core::{
     EncryptedToken, LocalKey, PublicKey, SecretKey, SignedToken, UnencryptedToken, UnsignedToken,
 };
@@ -51,8 +51,14 @@ where
 // v1 and v2 reject non-empty AAD by spec; v3 and v4 accept arbitrary bytes.
 macro_rules! local_roundtrip_test {
     ($name:ident, $version:ty, aad) => {
+        local_roundtrip_test!($name, $version, aad, cases = 64);
+    };
+    ($name:ident, $version:ty, no_aad) => {
+        local_roundtrip_test!($name, $version, no_aad, cases = 64);
+    };
+    ($name:ident, $version:ty, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -63,9 +69,9 @@ macro_rules! local_roundtrip_test {
             }
         }
     };
-    ($name:ident, $version:ty, no_aad) => {
+    ($name:ident, $version:ty, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -107,8 +113,14 @@ where
 
 macro_rules! public_roundtrip_test {
     ($name:ident, $version:ty, aad) => {
+        public_roundtrip_test!($name, $version, aad, cases = 64);
+    };
+    ($name:ident, $version:ty, no_aad) => {
+        public_roundtrip_test!($name, $version, no_aad, cases = 64);
+    };
+    ($name:ident, $version:ty, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -119,9 +131,9 @@ macro_rules! public_roundtrip_test {
             }
         }
     };
-    ($name:ident, $version:ty, no_aad) => {
+    ($name:ident, $version:ty, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -196,8 +208,14 @@ where
 
 macro_rules! wire_roundtrip_test {
     ($name:ident, $body:expr, aad) => {
+        wire_roundtrip_test!($name, $body, aad, cases = 64);
+    };
+    ($name:ident, $body:expr, no_aad) => {
+        wire_roundtrip_test!($name, $body, no_aad, cases = 64);
+    };
+    ($name:ident, $body:expr, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -208,9 +226,9 @@ macro_rules! wire_roundtrip_test {
             }
         }
     };
-    ($name:ident, $body:expr, no_aad) => {
+    ($name:ident, $body:expr, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -413,8 +431,14 @@ where
 
 macro_rules! tamper_test {
     ($name:ident, $body:expr, aad) => {
+        tamper_test!($name, $body, aad, cases = 64);
+    };
+    ($name:ident, $body:expr, no_aad) => {
+        tamper_test!($name, $body, no_aad, cases = 64);
+    };
+    ($name:ident, $body:expr, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 1..256),
@@ -427,9 +451,9 @@ macro_rules! tamper_test {
             }
         }
     };
-    ($name:ident, $body:expr, no_aad) => {
+    ($name:ident, $body:expr, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 1..256),
@@ -704,15 +728,13 @@ keyid_local_test!(keyid_v4_sodium, paseto_v4_sodium::core::V4);
 
 fn pke_roundtrip<V>() -> Result<(), TestCaseError>
 where
-    V: PkeSealingVersion + PkeUnsealingVersion + SealingVersion<Local> + SealingVersion<Public>,
+    V: PkeSealingVersion + PkeUnsealingVersion + SealingVersion<Local>,
     <V as HasKey<Local>>::Key: Clone,
 {
     let pdk = LocalKey::<V>::random().unwrap();
 
-    let secret = SecretKey::<V>::random().unwrap();
-    let public = secret.public_key();
-    let pke_pub: Key<V, PkePublic> = reencode_key(&public);
-    let pke_sec: Key<V, PkeSecret> = reencode_key(&secret);
+    let pke_sec = Key::<V, PkeSecret>::random().unwrap();
+    let pke_pub = pke_sec.public_key();
 
     let sealed = pdk.clone().seal(&pke_pub).unwrap();
     let recovered = sealed.unseal(&pke_sec).unwrap();
@@ -738,7 +760,8 @@ macro_rules! pke_test {
     };
 }
 
-// v1 PKE uses RSA-OAEP keys distinct from RSA-PSS signing keys, with no random generator.
+// v1 PKE uses RSA-OAEP-4096 keys distinct from RSA-PSS-2048 signing keys; keygen is slow.
+pke_test!(pke_v1, paseto_v1::core::V1, cases = 1);
 pke_test!(pke_v2, paseto_v2::core::V2, cases = 32);
 pke_test!(pke_v3, paseto_v3::core::V3, cases = 32);
 pke_test!(pke_v3_aws_lc, paseto_v3_aws_lc::core::V3, cases = 32);

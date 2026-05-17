@@ -82,6 +82,16 @@ impl PkeSealingVersion for V4 {
 }
 
 impl PkeUnsealingVersion for V4 {
+    fn random_pke_secret_key() -> Result<SecretKey, PasetoError> {
+        use paseto_core::version::SealingVersion;
+        <V4 as SealingVersion<Public>>::random()
+    }
+
+    fn pke_public_key_from_secret(sk: &SecretKey) -> PublicKey {
+        use paseto_core::version::SealingVersion;
+        <V4 as SealingVersion<Public>>::unsealing_key(sk)
+    }
+
     fn unseal_key(unsealing_key: &SecretKey, key_data: Box<[u8]>) -> Result<LocalKey, PasetoError> {
         use libsodium_rs::crypto_scalarmult::curve25519;
 

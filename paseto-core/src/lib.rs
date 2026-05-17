@@ -38,6 +38,10 @@ pub type LocalKey<V> = key::Key<V, version::Local>;
 pub type PublicKey<V> = key::Key<V, version::Public>;
 /// Private key used for token [`signing`](crate::UnsignedToken::sign)
 pub type SecretKey<V> = key::Key<V, version::Secret>;
+/// Public key used for [`sealing`](crate::LocalKey::seal) a [`LocalKey`] for a recipient
+pub type PkePublicKey<V> = key::Key<V, version::PkePublic>;
+/// Private key used for [`unsealing`](crate::paserk::SealedKey::unseal) a sealed [`LocalKey`]
+pub type PkeSecretKey<V> = key::Key<V, version::PkeSecret>;
 
 /// A token with publically readable data, but not yet verified
 pub type SignedToken<V, M, F = ()> = tokens::SealedToken<V, version::Public, M, F>;
