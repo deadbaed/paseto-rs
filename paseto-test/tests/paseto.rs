@@ -1,7 +1,7 @@
 use libtest_mimic::{Arguments, Failed, Trial};
 use paseto_core::key::HasKey;
 use paseto_core::validation::NoValidation;
-use paseto_core::version::{Local, Public, SealingVersion, Secret};
+use paseto_core::version::{Local, Public, SealingVersion, Secret, UnsealingVersion};
 use paseto_core::{
     EncryptedToken, LocalKey, PublicKey, SecretKey, SignedToken, UnencryptedToken, UnsignedToken,
 };
@@ -43,6 +43,7 @@ where
     V: HasKey<Local, Key: Send>,
     V: HasKey<Public, Key: Send>,
     V: HasKey<Secret, Key: Send>,
+    <V as UnsealingVersion<Local>>::Nonce: for<'a> TryFrom<&'a [u8]>,
 {
     fn add_tests(name: &str, tests: &mut Vec<Trial>) {
         let test_file: TestFile<Self> = read_test(&format!("{}.json", V::HEADER));
@@ -102,6 +103,10 @@ where
                 let token = UnencryptedToken::<V, _>::new(decrypted_token.claims)
                     .with_footer(decrypted_token.footer);
 
+                let nonce: <V as UnsealingVersion<Local>>::Nonce = nonce
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| "nonce length does not match this version")?;
                 let token = token
                     .dangerous_seal_with_nonce(&key, implicit_assertion.as_bytes(), nonce)
                     .unwrap();

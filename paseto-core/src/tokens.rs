@@ -149,7 +149,7 @@ where
         self,
         key: &Key<V, P::SealingKey>,
         aad: &[u8],
-        nonce: Vec<u8>,
+        nonce: V::Nonce,
     ) -> Result<SealedToken<V, P, M, F>, PasetoError> {
         let mut footer = Vec::new();
         self.footer
@@ -157,7 +157,12 @@ where
             .map_err(PasetoError::PayloadError)?;
         let footer = footer.into_boxed_slice();
 
-        let mut payload = nonce;
+        // Pre-size with a 128-byte heuristic for typical JSON claims so the nonce
+        // write, claims encode, and trailing tag append all fit without realloc.
+        let nonce_len = core::mem::size_of::<V::Nonce>();
+        let tag_len = core::mem::size_of::<V::Tag>();
+        let mut payload = Vec::with_capacity(nonce_len + 128 + tag_len);
+        payload.extend_from_slice(nonce.as_ref());
         self.claims
             .encode(&mut payload)
             .map_err(PasetoError::PayloadError)?;

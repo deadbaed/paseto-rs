@@ -97,8 +97,8 @@ impl paseto_core::version::SealingVersion<Public> for V1 {
         SecretKey::random()
     }
 
-    fn nonce() -> Result<Vec<u8>, PasetoError> {
-        Ok(Vec::with_capacity(96))
+    fn nonce() -> Result<[u8; 0], PasetoError> {
+        Ok([])
     }
 
     fn dangerous_seal_with_nonce(
@@ -133,6 +133,9 @@ impl paseto_core::version::SealingVersion<Public> for V1 {
 }
 
 impl paseto_core::version::UnsealingVersion<Public> for V1 {
+    type Nonce = [u8; 0];
+    type Tag = [u8; 256];
+
     fn unseal<'a>(
         key: &PublicKey,
         encoding: &'static str,
