@@ -46,7 +46,7 @@ impl paseto_core::version::SealingVersion<Local> for V2 {
     }
 
     fn nonce() -> Result<Vec<u8>, PasetoError> {
-        let mut nonce = [0; 32];
+        let mut nonce = [0; 24];
         getrandom::fill(&mut nonce).map_err(|_| PasetoError::CryptoError)?;
 
         let mut payload = Vec::with_capacity(64);
