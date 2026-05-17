@@ -66,8 +66,10 @@ impl paseto_core::version::SealingVersion<Local> for V4 {
         Ok(LocalKey(bytes))
     }
 
-    fn nonce() -> Result<Vec<u8>, PasetoError> {
-        Ok(random::bytes(32))
+    fn nonce() -> Result<[u8; 32], PasetoError> {
+        let mut nonce = [0; 32];
+        random::fill_bytes(&mut nonce);
+        Ok(nonce)
     }
 
     fn dangerous_seal_with_nonce(
@@ -96,6 +98,9 @@ impl paseto_core::version::SealingVersion<Local> for V4 {
 }
 
 impl paseto_core::version::UnsealingVersion<Local> for V4 {
+    type Nonce = [u8; 32];
+    type Tag = [u8; 32];
+
     fn unseal<'a>(
         key: &LocalKey,
         encoding: &'static str,

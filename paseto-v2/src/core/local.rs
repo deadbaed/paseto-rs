@@ -45,13 +45,10 @@ impl paseto_core::version::SealingVersion<Local> for V2 {
         Ok(LocalKey(bytes))
     }
 
-    fn nonce() -> Result<Vec<u8>, PasetoError> {
+    fn nonce() -> Result<[u8; 24], PasetoError> {
         let mut nonce = [0; 24];
         getrandom::fill(&mut nonce).map_err(|_| PasetoError::CryptoError)?;
-
-        let mut payload = Vec::with_capacity(64);
-        payload.extend_from_slice(&nonce);
-        Ok(payload)
+        Ok(nonce)
     }
 
     fn dangerous_seal_with_nonce(
@@ -93,6 +90,9 @@ impl paseto_core::version::SealingVersion<Local> for V2 {
 
 #[cfg(feature = "decrypting")]
 impl paseto_core::version::UnsealingVersion<Local> for V2 {
+    type Nonce = [u8; 24];
+    type Tag = [u8; 16];
+
     fn unseal<'a>(
         key: &LocalKey,
         encoding: &'static str,
