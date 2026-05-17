@@ -1,7 +1,7 @@
 use paseto_core::key::{HasKey, Key, KeyType};
 use paseto_core::paserk::{
-    IdVersion, KeyText, PieWrapVersion, PieWrappedKey, PkeSealingVersion, PkeUnsealingVersion,
-    SealedKey,
+    IdVersion, KeyText, PasswordWrappedKey, PieWrapVersion, PieWrappedKey, PkeSealingVersion,
+    PkeUnsealingVersion, SealedKey,
 };
 use paseto_core::validation::NoValidation;
 use paseto_core::version::{Local, PkePublic, PkeSecret, Public, SealingVersion, Secret, Version};
@@ -850,4 +850,169 @@ pie_test!(
     pie_secret_v4_sodium,
     pie_secret_roundtrip::<paseto_v4_sodium::core::V4>,
     cases = 64
+);
+
+/// Minimum-cost PBKW params per version, encoded as the wire-bytes layout
+/// of the version's `Params` zerocopy struct.
+///
+/// PBKDF2 (v1, v3, v3-aws-lc): `iterations: U32be` -> 4 bytes, value 1.
+/// Argon2id (v2, v4, v4-sodium): `mem: U64be, time: U32be, para: U32be` ->
+/// 16 bytes; mem=8192 (argon2 minimum), time=1, para=1.
+trait MinPwParams: paseto_core::paserk::PwWrapVersion
+where
+    Self::Params: zerocopy::FromBytes,
+{
+    const MIN_BYTES: &'static [u8];
+
+    fn min_params() -> Self::Params {
+        <Self::Params as zerocopy::FromBytes>::read_from_bytes(Self::MIN_BYTES)
+            .expect("min params byte layout matches version Params struct")
+    }
+}
+
+impl MinPwParams for paseto_v1::core::V1 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 1];
+}
+impl MinPwParams for paseto_v3::core::V3 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 1];
+}
+impl MinPwParams for paseto_v3_aws_lc::core::V3 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 1];
+}
+impl MinPwParams for paseto_v2::core::V2 {
+    // mem = 8192 bytes (argon2 minimum), time = 1, para = 1
+    const MIN_BYTES: &'static [u8] = &[
+        0, 0, 0, 0, 0, 0, 0x20, 0, // mem: U64be = 8192
+        0, 0, 0, 1, // time: U32be = 1
+        0, 0, 0, 1, // para: U32be = 1
+    ];
+}
+impl MinPwParams for paseto_v4::core::V4 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0, 1, 0, 0, 0, 1];
+}
+impl MinPwParams for paseto_v4_sodium::core::V4 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0, 1, 0, 0, 0, 1];
+}
+
+fn pbkw_local_roundtrip<V>(pw: Vec<u8>, alt_pw: Vec<u8>) -> Result<(), TestCaseError>
+where
+    V: MinPwParams + SealingVersion<Local>,
+    V::Params: zerocopy::FromBytes,
+    <V as HasKey<Local>>::Key: Clone,
+{
+    prop_assume!(pw != alt_pw);
+    let key = LocalKey::<V>::random().unwrap();
+    let params = V::min_params();
+
+    let wrapped = key.clone().password_wrap_with_params(&pw, &params).unwrap();
+    let s = wrapped.to_string();
+    let parsed: PasswordWrappedKey<V, Local> = s.parse().unwrap();
+    let unwrapped = parsed.unwrap(&pw).unwrap();
+    prop_assert!(eq_keys(&key, &unwrapped));
+
+    let wrong = key.password_wrap_with_params(&pw, &params).unwrap();
+    prop_assert!(wrong.unwrap(&alt_pw).is_err());
+    Ok(())
+}
+
+fn pbkw_secret_roundtrip<V>(pw: Vec<u8>, alt_pw: Vec<u8>) -> Result<(), TestCaseError>
+where
+    V: MinPwParams + SealingVersion<Public> + HasKey<Secret>,
+    V::Params: zerocopy::FromBytes,
+    <V as HasKey<Secret>>::Key: Clone,
+{
+    prop_assume!(pw != alt_pw);
+    let secret = SecretKey::<V>::random().unwrap();
+    let params = V::min_params();
+
+    let wrapped = secret
+        .clone()
+        .password_wrap_with_params(&pw, &params)
+        .unwrap();
+    let s = wrapped.to_string();
+    let parsed: PasswordWrappedKey<V, Secret> = s.parse().unwrap();
+    let unwrapped = parsed.unwrap(&pw).unwrap();
+    prop_assert!(eq_keys(&secret, &unwrapped));
+
+    let wrong = secret.password_wrap_with_params(&pw, &params).unwrap();
+    prop_assert!(wrong.unwrap(&alt_pw).is_err());
+    Ok(())
+}
+
+macro_rules! pbkw_test {
+    ($name:ident, $body:expr, cases = $cases:expr) => {
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases($cases))]
+            #[test]
+            fn $name(
+                pw in prop::collection::vec(any::<u8>(), 1..32),
+                alt_pw in prop::collection::vec(any::<u8>(), 1..32),
+            ) {
+                $body(pw, alt_pw)?;
+            }
+        }
+    };
+}
+
+pbkw_test!(
+    pbkw_local_v1,
+    pbkw_local_roundtrip::<paseto_v1::core::V1>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_local_v2,
+    pbkw_local_roundtrip::<paseto_v2::core::V2>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_local_v3,
+    pbkw_local_roundtrip::<paseto_v3::core::V3>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_local_v3_aws_lc,
+    pbkw_local_roundtrip::<paseto_v3_aws_lc::core::V3>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_local_v4,
+    pbkw_local_roundtrip::<paseto_v4::core::V4>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_local_v4_sodium,
+    pbkw_local_roundtrip::<paseto_v4_sodium::core::V4>,
+    cases = 16
+);
+
+// v1 RSA-2048 keygen is the bottleneck here, not pbkw itself.
+pbkw_test!(
+    pbkw_secret_v1,
+    pbkw_secret_roundtrip::<paseto_v1::core::V1>,
+    cases = 4
+);
+pbkw_test!(
+    pbkw_secret_v2,
+    pbkw_secret_roundtrip::<paseto_v2::core::V2>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v3,
+    pbkw_secret_roundtrip::<paseto_v3::core::V3>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v3_aws_lc,
+    pbkw_secret_roundtrip::<paseto_v3_aws_lc::core::V3>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v4,
+    pbkw_secret_roundtrip::<paseto_v4::core::V4>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v4_sodium,
+    pbkw_secret_roundtrip::<paseto_v4_sodium::core::V4>,
+    cases = 16
 );
