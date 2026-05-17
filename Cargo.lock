@@ -1326,6 +1326,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kem"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01737161ba802849cfd486b5bd209d38ba4943494c249a8126005170c7621edd"
+dependencies = [
+ "crypto-common 0.2.1",
+ "rand_core 0.10.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1512,6 +1522,19 @@ dependencies = [
  "pkcs8 0.11.0",
  "sha3",
  "signature 3.0.0",
+]
+
+[[package]]
+name = "ml-kem"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68c77d5ff6d755d09a0ef4d4d28c2b7e83658fe83e8c736d55e93d43e380d1cd"
+dependencies = [
+ "hybrid-array",
+ "kem",
+ "module-lattice",
+ "rand_core 0.10.0",
+ "sha3",
 ]
 
 [[package]]
@@ -1774,8 +1797,10 @@ dependencies = [
  "hmac",
  "hybrid-array",
  "ml-dsa",
+ "ml-kem",
  "paseto-core",
  "paseto-json",
+ "pbkdf2",
  "sha2 0.11.0",
  "zerocopy",
 ]

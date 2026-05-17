@@ -39,3 +39,39 @@ pub type PublicKey = paseto_core::PublicKey<core::V5>;
 /// Private key used for token [`signing`](UnsignedToken::sign)
 #[cfg(feature = "signing")]
 pub type SecretKey = paseto_core::SecretKey<core::V5>;
+
+/// Public key used for [`sealing`](LocalKey::seal) a [`LocalKey`] for a recipient.
+#[cfg(feature = "pke")]
+pub type PkePublicKey = paseto_core::PkePublicKey<core::V5>;
+/// Private key used for [`unsealing`](SealedKey::unseal) a sealed [`LocalKey`].
+#[cfg(feature = "pke")]
+pub type PkeSecretKey = paseto_core::PkeSecretKey<core::V5>;
+
+/// A short ID for a key.
+#[cfg(feature = "id")]
+pub type KeyId<K> = paseto_core::paserk::KeyId<core::V5, K>;
+/// A plaintext encoding of a key.
+pub type KeyText<K> = paseto_core::paserk::KeyText<core::V5, K>;
+/// An asymmetrically encrypted [`LocalKey`].
+#[cfg(feature = "pke")]
+pub type SealedKey = paseto_core::paserk::SealedKey<core::V5>;
+
+/// An password encrypted [`LocalKey`].
+#[cfg(feature = "pbkw")]
+pub type PasswordWrappedLocalKey =
+    paseto_core::paserk::PasswordWrappedKey<core::V5, paseto_core::version::Local>;
+
+/// An password encrypted [`SecretKey`].
+#[cfg(all(feature = "pbkw", feature = "signing"))]
+pub type PasswordWrappedSecretKey =
+    paseto_core::paserk::PasswordWrappedKey<core::V5, paseto_core::version::Secret>;
+
+/// A symmetrically wrapped [`LocalKey`].
+#[cfg(feature = "pie-wrap")]
+pub type PieWrappedLocalKey =
+    paseto_core::paserk::PieWrappedKey<core::V5, paseto_core::version::Local>;
+
+/// A symmetrically wrapped [`SecretKey`].
+#[cfg(all(feature = "pie-wrap", feature = "signing"))]
+pub type PieWrappedSecretKey =
+    paseto_core::paserk::PieWrappedKey<core::V5, paseto_core::version::Secret>;
