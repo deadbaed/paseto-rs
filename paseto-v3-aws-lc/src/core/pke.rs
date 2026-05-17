@@ -91,6 +91,16 @@ impl PkeSealingVersion for V3 {
 }
 
 impl PkeUnsealingVersion for V3 {
+    fn random_pke_secret_key() -> Result<SecretKey, PasetoError> {
+        use paseto_core::version::SealingVersion;
+        <V3 as SealingVersion<Public>>::random()
+    }
+
+    fn pke_public_key_from_secret(sk: &SecretKey) -> PublicKey {
+        use paseto_core::version::SealingVersion;
+        <V3 as SealingVersion<Public>>::unsealing_key(sk)
+    }
+
     fn unseal_key(
         unsealing_key: &SecretKey,
         mut key_data: Box<[u8]>,

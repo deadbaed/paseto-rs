@@ -15,13 +15,34 @@ pub trait PkeSealingVersion: Version + HasKey<Local> + HasKey<PkePublic> {
     ) -> Result<Box<[u8]>, PasetoError>;
 }
 
-/// This PASETO implementation allows decrypting keys using a [`SecretKey`](crate::SecretKey)
-pub trait PkeUnsealingVersion: Version + HasKey<Local> + HasKey<PkeSecret> {
+/// This PASETO implementation allows decrypting keys using a [`PkeSecretKey`](crate::PkeSecretKey),
+/// and generating new PKE keypairs.
+pub trait PkeUnsealingVersion:
+    Version + HasKey<Local> + HasKey<PkeSecret> + HasKey<PkePublic>
+{
+    /// Generate a random PKE secret key.
+    fn random_pke_secret_key() -> Result<KeyInner<Self, PkeSecret>, PasetoError>;
+
+    /// Derive the PKE public key corresponding to the given secret key.
+    fn pke_public_key_from_secret(sk: &KeyInner<Self, PkeSecret>) -> KeyInner<Self, PkePublic>;
+
     /// Unseal the key using the secret key
     fn unseal_key(
         sealing_key: &KeyInner<Self, PkeSecret>,
         key_data: Box<[u8]>,
     ) -> Result<KeyInner<Self, Local>, PasetoError>;
+}
+
+impl<V: PkeUnsealingVersion> Key<V, PkeSecret> {
+    /// Generate a random PKE secret key.
+    pub fn random() -> Result<Self, PasetoError> {
+        V::random_pke_secret_key().map(Self)
+    }
+
+    /// Derive the PKE public key associated with this secret key.
+    pub fn public_key(&self) -> Key<V, PkePublic> {
+        Key(V::pke_public_key_from_secret(&self.0))
+    }
 }
 
 /// An asymmetrically encrypted [`LocalKey`].

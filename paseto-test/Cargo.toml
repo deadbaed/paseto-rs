@@ -13,6 +13,8 @@ paseto-v3.workspace = true
 paseto-v3-aws-lc.workspace = true
 paseto-v4.workspace = true
 paseto-v4-sodium.workspace = true
+paseto-v5.workspace = true
+paseto-v6.workspace = true
 
 hex = "0.4"
 serde = { version = "1", features = ["derive"] }

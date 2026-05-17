@@ -4,7 +4,7 @@ use paseto_core::paserk::{
     PkeUnsealingVersion, SealedKey,
 };
 use paseto_core::validation::NoValidation;
-use paseto_core::version::{Local, PkePublic, PkeSecret, Public, SealingVersion, Secret, Version};
+use paseto_core::version::{Local, PkeSecret, Public, SealingVersion, Secret, Version};
 use paseto_core::{
     EncryptedToken, LocalKey, PublicKey, SecretKey, SignedToken, UnencryptedToken, UnsignedToken,
 };
@@ -51,8 +51,14 @@ where
 // v1 and v2 reject non-empty AAD by spec; v3 and v4 accept arbitrary bytes.
 macro_rules! local_roundtrip_test {
     ($name:ident, $version:ty, aad) => {
+        local_roundtrip_test!($name, $version, aad, cases = 64);
+    };
+    ($name:ident, $version:ty, no_aad) => {
+        local_roundtrip_test!($name, $version, no_aad, cases = 64);
+    };
+    ($name:ident, $version:ty, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -63,9 +69,9 @@ macro_rules! local_roundtrip_test {
             }
         }
     };
-    ($name:ident, $version:ty, no_aad) => {
+    ($name:ident, $version:ty, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -83,6 +89,8 @@ local_roundtrip_test!(local_roundtrip_v3, paseto_v3::core::V3, aad);
 local_roundtrip_test!(local_roundtrip_v3_aws_lc, paseto_v3_aws_lc::core::V3, aad);
 local_roundtrip_test!(local_roundtrip_v4, paseto_v4::core::V4, aad);
 local_roundtrip_test!(local_roundtrip_v4_sodium, paseto_v4_sodium::core::V4, aad);
+local_roundtrip_test!(local_roundtrip_v5, paseto_v5::core::V5, aad);
+local_roundtrip_test!(local_roundtrip_v6, paseto_v6::core::V6, aad);
 
 fn public_roundtrip<V>(claims: Vec<u8>, footer: Vec<u8>, aad: Vec<u8>) -> Result<(), TestCaseError>
 where
@@ -107,8 +115,14 @@ where
 
 macro_rules! public_roundtrip_test {
     ($name:ident, $version:ty, aad) => {
+        public_roundtrip_test!($name, $version, aad, cases = 64);
+    };
+    ($name:ident, $version:ty, no_aad) => {
+        public_roundtrip_test!($name, $version, no_aad, cases = 64);
+    };
+    ($name:ident, $version:ty, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -119,9 +133,9 @@ macro_rules! public_roundtrip_test {
             }
         }
     };
-    ($name:ident, $version:ty, no_aad) => {
+    ($name:ident, $version:ty, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -139,6 +153,10 @@ public_roundtrip_test!(public_roundtrip_v3, paseto_v3::core::V3, aad);
 public_roundtrip_test!(public_roundtrip_v3_aws_lc, paseto_v3_aws_lc::core::V3, aad);
 public_roundtrip_test!(public_roundtrip_v4, paseto_v4::core::V4, aad);
 public_roundtrip_test!(public_roundtrip_v4_sodium, paseto_v4_sodium::core::V4, aad);
+// ML-DSA-87 signing is ~5-10ms.
+public_roundtrip_test!(public_roundtrip_v5, paseto_v5::core::V5, aad, cases = 32);
+// SLH-DSA-SHA2-128s signing is ~1-3s.
+public_roundtrip_test!(public_roundtrip_v6, paseto_v6::core::V6, aad, cases = 2);
 
 fn local_wire_roundtrip<V>(
     claims: Vec<u8>,
@@ -196,8 +214,14 @@ where
 
 macro_rules! wire_roundtrip_test {
     ($name:ident, $body:expr, aad) => {
+        wire_roundtrip_test!($name, $body, aad, cases = 64);
+    };
+    ($name:ident, $body:expr, no_aad) => {
+        wire_roundtrip_test!($name, $body, no_aad, cases = 64);
+    };
+    ($name:ident, $body:expr, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -208,9 +232,9 @@ macro_rules! wire_roundtrip_test {
             }
         }
     };
-    ($name:ident, $body:expr, no_aad) => {
+    ($name:ident, $body:expr, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 0..256),
@@ -252,6 +276,16 @@ wire_roundtrip_test!(
     local_wire_roundtrip::<paseto_v4_sodium::core::V4>,
     aad
 );
+wire_roundtrip_test!(
+    wire_local_v5,
+    local_wire_roundtrip::<paseto_v5::core::V5>,
+    aad
+);
+wire_roundtrip_test!(
+    wire_local_v6,
+    local_wire_roundtrip::<paseto_v6::core::V6>,
+    aad
+);
 
 wire_roundtrip_test!(
     wire_public_v1,
@@ -282,6 +316,18 @@ wire_roundtrip_test!(
     wire_public_v4_sodium,
     public_wire_roundtrip::<paseto_v4_sodium::core::V4>,
     aad
+);
+wire_roundtrip_test!(
+    wire_public_v5,
+    public_wire_roundtrip::<paseto_v5::core::V5>,
+    aad,
+    cases = 32
+);
+wire_roundtrip_test!(
+    wire_public_v6,
+    public_wire_roundtrip::<paseto_v6::core::V6>,
+    aad,
+    cases = 2
 );
 
 /// Locate the payload and footer regions in a serialized PASETO.
@@ -413,8 +459,14 @@ where
 
 macro_rules! tamper_test {
     ($name:ident, $body:expr, aad) => {
+        tamper_test!($name, $body, aad, cases = 64);
+    };
+    ($name:ident, $body:expr, no_aad) => {
+        tamper_test!($name, $body, no_aad, cases = 64);
+    };
+    ($name:ident, $body:expr, aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 1..256),
@@ -427,9 +479,9 @@ macro_rules! tamper_test {
             }
         }
     };
-    ($name:ident, $body:expr, no_aad) => {
+    ($name:ident, $body:expr, no_aad, cases = $cases:expr) => {
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(64))]
+            #![proptest_config(ProptestConfig::with_cases($cases))]
             #[test]
             fn $name(
                 claims in prop::collection::vec(any::<u8>(), 1..256),
@@ -457,6 +509,8 @@ tamper_test!(
     local_tamper::<paseto_v4_sodium::core::V4>,
     aad
 );
+tamper_test!(tamper_local_v5, local_tamper::<paseto_v5::core::V5>, aad);
+tamper_test!(tamper_local_v6, local_tamper::<paseto_v6::core::V6>, aad);
 
 tamper_test!(
     tamper_public_v1,
@@ -479,6 +533,18 @@ tamper_test!(
     tamper_public_v4_sodium,
     public_tamper::<paseto_v4_sodium::core::V4>,
     aad
+);
+tamper_test!(
+    tamper_public_v5,
+    public_tamper::<paseto_v5::core::V5>,
+    aad,
+    cases = 32
+);
+tamper_test!(
+    tamper_public_v6,
+    public_tamper::<paseto_v6::core::V6>,
+    aad,
+    cases = 2
 );
 
 fn local_cross_impl<VA, VB>(
@@ -651,6 +717,8 @@ keytext_local_test!(keytext_local_v3, paseto_v3::core::V3);
 keytext_local_test!(keytext_local_v3_aws_lc, paseto_v3_aws_lc::core::V3);
 keytext_local_test!(keytext_local_v4, paseto_v4::core::V4);
 keytext_local_test!(keytext_local_v4_sodium, paseto_v4_sodium::core::V4);
+keytext_local_test!(keytext_local_v5, paseto_v5::core::V5);
+keytext_local_test!(keytext_local_v6, paseto_v6::core::V6);
 
 // v1 RSA keygen is slow; cap cases.
 keytext_secret_test!(keytext_secret_v1, paseto_v1::core::V1, cases = 4);
@@ -667,6 +735,9 @@ keytext_secret_test!(
     paseto_v4_sodium::core::V4,
     cases = 64
 );
+keytext_secret_test!(keytext_secret_v5, paseto_v5::core::V5, cases = 32);
+// SLH-DSA-SHA2-128s keygen is fast (~milliseconds), but signing isn't.
+keytext_secret_test!(keytext_secret_v6, paseto_v6::core::V6, cases = 32);
 
 fn keyid_deterministic<V, K>(key: Key<V, K>) -> Result<(), TestCaseError>
 where
@@ -701,18 +772,18 @@ keyid_local_test!(keyid_v3, paseto_v3::core::V3);
 keyid_local_test!(keyid_v3_aws_lc, paseto_v3_aws_lc::core::V3);
 keyid_local_test!(keyid_v4, paseto_v4::core::V4);
 keyid_local_test!(keyid_v4_sodium, paseto_v4_sodium::core::V4);
+keyid_local_test!(keyid_v5, paseto_v5::core::V5);
+keyid_local_test!(keyid_v6, paseto_v6::core::V6);
 
 fn pke_roundtrip<V>() -> Result<(), TestCaseError>
 where
-    V: PkeSealingVersion + PkeUnsealingVersion + SealingVersion<Local> + SealingVersion<Public>,
+    V: PkeSealingVersion + PkeUnsealingVersion + SealingVersion<Local>,
     <V as HasKey<Local>>::Key: Clone,
 {
     let pdk = LocalKey::<V>::random().unwrap();
 
-    let secret = SecretKey::<V>::random().unwrap();
-    let public = secret.public_key();
-    let pke_pub: Key<V, PkePublic> = reencode_key(&public);
-    let pke_sec: Key<V, PkeSecret> = reencode_key(&secret);
+    let pke_sec = Key::<V, PkeSecret>::random().unwrap();
+    let pke_pub = pke_sec.public_key();
 
     let sealed = pdk.clone().seal(&pke_pub).unwrap();
     let recovered = sealed.unseal(&pke_sec).unwrap();
@@ -738,12 +809,15 @@ macro_rules! pke_test {
     };
 }
 
-// v1 PKE uses RSA-OAEP keys distinct from RSA-PSS signing keys, with no random generator.
+// v1 PKE uses RSA-OAEP-4096 keys distinct from RSA-PSS-2048 signing keys; keygen is slow.
+pke_test!(pke_v1, paseto_v1::core::V1, cases = 1);
 pke_test!(pke_v2, paseto_v2::core::V2, cases = 32);
 pke_test!(pke_v3, paseto_v3::core::V3, cases = 32);
 pke_test!(pke_v3_aws_lc, paseto_v3_aws_lc::core::V3, cases = 32);
 pke_test!(pke_v4, paseto_v4::core::V4, cases = 32);
 pke_test!(pke_v4_sodium, paseto_v4_sodium::core::V4, cases = 32);
+pke_test!(pke_v5, paseto_v5::core::V5, cases = 8);
+pke_test!(pke_v6, paseto_v6::core::V6, cases = 8);
 
 fn pie_local_roundtrip<V>() -> Result<(), TestCaseError>
 where
@@ -819,6 +893,16 @@ pie_test!(
     pie_local_roundtrip::<paseto_v4_sodium::core::V4>,
     cases = 64
 );
+pie_test!(
+    pie_local_v5,
+    pie_local_roundtrip::<paseto_v5::core::V5>,
+    cases = 64
+);
+pie_test!(
+    pie_local_v6,
+    pie_local_roundtrip::<paseto_v6::core::V6>,
+    cases = 64
+);
 
 // v1 SecretKey::random performs RSA-2048 keygen; cap cases.
 pie_test!(
@@ -850,6 +934,16 @@ pie_test!(
     pie_secret_v4_sodium,
     pie_secret_roundtrip::<paseto_v4_sodium::core::V4>,
     cases = 64
+);
+pie_test!(
+    pie_secret_v5,
+    pie_secret_roundtrip::<paseto_v5::core::V5>,
+    cases = 16
+);
+pie_test!(
+    pie_secret_v6,
+    pie_secret_roundtrip::<paseto_v6::core::V6>,
+    cases = 16
 );
 
 /// Minimum-cost PBKW params per version, encoded as the wire-bytes layout
@@ -891,6 +985,14 @@ impl MinPwParams for paseto_v4::core::V4 {
     const MIN_BYTES: &'static [u8] = &[0, 0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0, 1, 0, 0, 0, 1];
 }
 impl MinPwParams for paseto_v4_sodium::core::V4 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0, 1, 0, 0, 0, 1];
+}
+// v5 uses PBKDF2-HMAC-SHA384 (same params layout as v3).
+impl MinPwParams for paseto_v5::core::V5 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 1];
+}
+// v6 uses Argon2id (same params layout as v4).
+impl MinPwParams for paseto_v6::core::V6 {
     const MIN_BYTES: &'static [u8] = &[0, 0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0, 1, 0, 0, 0, 1];
 }
 
@@ -984,6 +1086,16 @@ pbkw_test!(
     pbkw_local_roundtrip::<paseto_v4_sodium::core::V4>,
     cases = 16
 );
+pbkw_test!(
+    pbkw_local_v5,
+    pbkw_local_roundtrip::<paseto_v5::core::V5>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_local_v6,
+    pbkw_local_roundtrip::<paseto_v6::core::V6>,
+    cases = 16
+);
 
 // v1 RSA-2048 keygen is the bottleneck here, not pbkw itself.
 pbkw_test!(
@@ -1014,5 +1126,15 @@ pbkw_test!(
 pbkw_test!(
     pbkw_secret_v4_sodium,
     pbkw_secret_roundtrip::<paseto_v4_sodium::core::V4>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v5,
+    pbkw_secret_roundtrip::<paseto_v5::core::V5>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v6,
+    pbkw_secret_roundtrip::<paseto_v6::core::V6>,
     cases = 16
 );

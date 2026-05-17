@@ -130,6 +130,17 @@ impl PkeSealingVersion for V1 {
 }
 
 impl PkeUnsealingVersion for V1 {
+    fn random_pke_secret_key() -> Result<PkeSecretKey, PasetoError> {
+        let mut rng = rsa::rand_core::UnwrapErr(getrandom::SysRng);
+        rsa::RsaPrivateKey::new(&mut rng, 4096)
+            .map(PkeSecretKey)
+            .map_err(|_| PasetoError::CryptoError)
+    }
+
+    fn pke_public_key_from_secret(sk: &PkeSecretKey) -> PkePublicKey {
+        PkePublicKey(sk.0.to_public_key())
+    }
+
     fn unseal_key(
         unsealing_key: &PkeSecretKey,
         mut key_data: Box<[u8]>,
