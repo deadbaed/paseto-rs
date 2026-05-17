@@ -4,18 +4,24 @@ version = "0.0.0"
 edition = "2024"
 authors = ["Conrad Ludgate <conradludgate@gmail.com>"]
 repository = "https://github.com/conradludgate/paseto-rs"
-description = "DRAFT PASETO V6 (post-quantum, SLH-DSA) based on RustCrypto"
+description = "DRAFT PASETO/PASERK V6 (post-quantum, SLH-DSA + X-Wing) based on RustCrypto"
 license = "Apache-2.0"
 publish = false
 
 [features]
-default = ["signing", "encrypting"]
+default = ["signing", "encrypting", "paserk"]
 
 signing = ["verifying", "dep:getrandom"]
 verifying = ["dep:slh-dsa"]
 
 encrypting = ["decrypting", "dep:getrandom"]
 decrypting = ["dep:chacha20", "dep:blake2"]
+
+paserk = ["pbkw", "pie-wrap", "pke", "id"]
+id = ["dep:blake2"]
+pbkw = ["encrypting", "dep:argon2", "dep:getrandom"]
+pie-wrap = ["encrypting", "dep:getrandom"]
+pke = ["encrypting", "dep:x-wing", "dep:getrandom"]
 
 [dependencies]
 paseto-core.workspace = true
@@ -29,8 +35,10 @@ zerocopy = { version = "0.8", features = ["derive"] }
 
 blake2 = { version = "0.11.0-rc.6", default-features = false, optional = true }
 chacha20 = { version = "0.10", default-features = false, features = ["xchacha"], optional = true }
+argon2 = { version = "0.6.0-rc.8", default-features = false, features = ["alloc"], optional = true }
 
 slh-dsa = { version = "0.2.0-rc.5", default-features = false, optional = true }
+x-wing = { version = "0.1.0-rc.0", default-features = false, features = ["getrandom"], optional = true }
 
 [dev-dependencies]
 paseto-json.workspace = true

@@ -718,6 +718,7 @@ keytext_local_test!(keytext_local_v3_aws_lc, paseto_v3_aws_lc::core::V3);
 keytext_local_test!(keytext_local_v4, paseto_v4::core::V4);
 keytext_local_test!(keytext_local_v4_sodium, paseto_v4_sodium::core::V4);
 keytext_local_test!(keytext_local_v5, paseto_v5::core::V5);
+keytext_local_test!(keytext_local_v6, paseto_v6::core::V6);
 
 // v1 RSA keygen is slow; cap cases.
 keytext_secret_test!(keytext_secret_v1, paseto_v1::core::V1, cases = 4);
@@ -735,6 +736,8 @@ keytext_secret_test!(
     cases = 64
 );
 keytext_secret_test!(keytext_secret_v5, paseto_v5::core::V5, cases = 32);
+// SLH-DSA-SHA2-128s keygen is fast (~milliseconds), but signing isn't.
+keytext_secret_test!(keytext_secret_v6, paseto_v6::core::V6, cases = 32);
 
 fn keyid_deterministic<V, K>(key: Key<V, K>) -> Result<(), TestCaseError>
 where
@@ -770,6 +773,7 @@ keyid_local_test!(keyid_v3_aws_lc, paseto_v3_aws_lc::core::V3);
 keyid_local_test!(keyid_v4, paseto_v4::core::V4);
 keyid_local_test!(keyid_v4_sodium, paseto_v4_sodium::core::V4);
 keyid_local_test!(keyid_v5, paseto_v5::core::V5);
+keyid_local_test!(keyid_v6, paseto_v6::core::V6);
 
 fn pke_roundtrip<V>() -> Result<(), TestCaseError>
 where
@@ -813,6 +817,7 @@ pke_test!(pke_v3_aws_lc, paseto_v3_aws_lc::core::V3, cases = 32);
 pke_test!(pke_v4, paseto_v4::core::V4, cases = 32);
 pke_test!(pke_v4_sodium, paseto_v4_sodium::core::V4, cases = 32);
 pke_test!(pke_v5, paseto_v5::core::V5, cases = 8);
+pke_test!(pke_v6, paseto_v6::core::V6, cases = 8);
 
 fn pie_local_roundtrip<V>() -> Result<(), TestCaseError>
 where
@@ -893,6 +898,11 @@ pie_test!(
     pie_local_roundtrip::<paseto_v5::core::V5>,
     cases = 64
 );
+pie_test!(
+    pie_local_v6,
+    pie_local_roundtrip::<paseto_v6::core::V6>,
+    cases = 64
+);
 
 // v1 SecretKey::random performs RSA-2048 keygen; cap cases.
 pie_test!(
@@ -928,6 +938,11 @@ pie_test!(
 pie_test!(
     pie_secret_v5,
     pie_secret_roundtrip::<paseto_v5::core::V5>,
+    cases = 16
+);
+pie_test!(
+    pie_secret_v6,
+    pie_secret_roundtrip::<paseto_v6::core::V6>,
     cases = 16
 );
 
@@ -975,6 +990,10 @@ impl MinPwParams for paseto_v4_sodium::core::V4 {
 // v5 uses PBKDF2-HMAC-SHA384 (same params layout as v3).
 impl MinPwParams for paseto_v5::core::V5 {
     const MIN_BYTES: &'static [u8] = &[0, 0, 0, 1];
+}
+// v6 uses Argon2id (same params layout as v4).
+impl MinPwParams for paseto_v6::core::V6 {
+    const MIN_BYTES: &'static [u8] = &[0, 0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0, 1, 0, 0, 0, 1];
 }
 
 fn pbkw_local_roundtrip<V>(pw: Vec<u8>, alt_pw: Vec<u8>) -> Result<(), TestCaseError>
@@ -1072,6 +1091,11 @@ pbkw_test!(
     pbkw_local_roundtrip::<paseto_v5::core::V5>,
     cases = 16
 );
+pbkw_test!(
+    pbkw_local_v6,
+    pbkw_local_roundtrip::<paseto_v6::core::V6>,
+    cases = 16
+);
 
 // v1 RSA-2048 keygen is the bottleneck here, not pbkw itself.
 pbkw_test!(
@@ -1107,5 +1131,10 @@ pbkw_test!(
 pbkw_test!(
     pbkw_secret_v5,
     pbkw_secret_roundtrip::<paseto_v5::core::V5>,
+    cases = 16
+);
+pbkw_test!(
+    pbkw_secret_v6,
+    pbkw_secret_roundtrip::<paseto_v6::core::V6>,
     cases = 16
 );

@@ -2,8 +2,14 @@ use paseto_core::version;
 
 #[cfg(feature = "decrypting")]
 mod local;
+#[cfg(feature = "pie-wrap")]
+mod pie_wrap;
+#[cfg(feature = "pke")]
+mod pke;
 #[cfg(feature = "verifying")]
 mod public;
+#[cfg(feature = "pbkw")]
+mod pw_wrap;
 
 pub struct V6;
 
@@ -19,9 +25,31 @@ pub struct SecretKey(pub(super) slh_dsa::SigningKey<slh_dsa::Sha2_128s>);
 #[derive(Clone)]
 pub struct PublicKey(pub(super) slh_dsa::VerifyingKey<slh_dsa::Sha2_128s>);
 
+#[cfg(feature = "pke")]
+#[derive(Clone)]
+pub struct PkeSecretKey(pub(super) x_wing::DecapsulationKey);
+
+#[cfg(feature = "pke")]
+#[derive(Clone)]
+pub struct PkePublicKey(pub(super) x_wing::EncapsulationKey);
+
 impl version::Version for V6 {
     const HEADER: &'static str = "v6";
     const PASERK_HEADER: &'static str = "k6";
+}
+
+#[cfg(feature = "id")]
+impl paseto_core::paserk::IdVersion for V6 {
+    fn hash_key(key_header: &'static str, key_data: &[u8]) -> [u8; 33] {
+        use digest::consts::U33;
+        use digest::{FixedOutput, Update};
+
+        let mut ctx = blake2::Blake2b::<U33>::default();
+        ctx.update(b"k6");
+        ctx.update(key_header.as_bytes());
+        ctx.update(key_data);
+        ctx.finalize_fixed().into()
+    }
 }
 
 #[cfg(feature = "decrypting")]

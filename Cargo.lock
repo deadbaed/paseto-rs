@@ -1810,6 +1810,7 @@ dependencies = [
 name = "paseto-v6"
 version = "0.0.0"
 dependencies = [
+ "argon2",
  "blake2 0.11.0-rc.6",
  "chacha20 0.10.0",
  "cipher 0.5.1",
@@ -1820,6 +1821,7 @@ dependencies = [
  "paseto-json",
  "rand_core 0.10.0",
  "slh-dsa",
+ "x-wing",
  "zerocopy",
 ]
 
@@ -3167,6 +3169,29 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
+]
+
+[[package]]
+name = "x-wing"
+version = "0.1.0-rc.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17d0d5f4d1f26b9b9e7477af1d3bef960e1d1fb64edab7912fde472a8a8432e"
+dependencies = [
+ "kem",
+ "ml-kem",
+ "rand_core 0.10.0",
+ "sha3",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "x25519-dalek"
+version = "3.0.0-pre.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3d5d6ff67acd3945b933e592bfa7143db4fcbb2f871754b6b9fbd7847fc5aea"
+dependencies = [
+ "curve25519-dalek 5.0.0-pre.6",
+ "rand_core 0.10.0",
 ]
 
 [[package]]
