@@ -9,6 +9,7 @@ members = [
     "paseto-v4",
     "paseto-v4-sodium",
     "paseto-v5",
+    "paseto-v6",
     "paseto-test",
     "paseto-bench",
 ]
@@ -24,6 +25,7 @@ paseto-v3-aws-lc = { path = "paseto-v3-aws-lc", version = "0.1.0-rc.9" }
 paseto-v4 = { path = "paseto-v4", version = "0.1.0-rc.9" }
 paseto-v4-sodium = { path = "paseto-v4-sodium", version = "0.1.0-rc.9" }
 paseto-v5 = { path = "paseto-v5" }
+paseto-v6 = { path = "paseto-v6" }
 
 [profile.dev.package."*"]
 opt-level = 2

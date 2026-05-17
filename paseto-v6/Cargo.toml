@@ -1,0 +1,36 @@
+[package]
+name = "paseto-v6"
+version = "0.0.0"
+edition = "2024"
+authors = ["Conrad Ludgate <conradludgate@gmail.com>"]
+repository = "https://github.com/conradludgate/paseto-rs"
+description = "DRAFT PASETO V6 (post-quantum, SLH-DSA) based on RustCrypto"
+license = "Apache-2.0"
+publish = false
+
+[features]
+default = ["signing", "encrypting"]
+
+signing = ["verifying", "dep:getrandom"]
+verifying = ["dep:slh-dsa"]
+
+encrypting = ["decrypting", "dep:getrandom"]
+decrypting = ["dep:chacha20", "dep:blake2"]
+
+[dependencies]
+paseto-core.workspace = true
+
+hybrid-array = "0.4"
+cipher = { version = "0.5", default-features = false }
+digest = { version = "0.11", default-features = false }
+getrandom = { version = "0.4", features = ["sys_rng"], optional = true }
+rand_core = { version = "0.10", default-features = false }
+zerocopy = { version = "0.8", features = ["derive"] }
+
+blake2 = { version = "0.11.0-rc.6", default-features = false, optional = true }
+chacha20 = { version = "0.10", default-features = false, features = ["xchacha"], optional = true }
+
+slh-dsa = { version = "0.2.0-rc.5", default-features = false, optional = true }
+
+[dev-dependencies]
+paseto-json.workspace = true

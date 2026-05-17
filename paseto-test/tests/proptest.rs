@@ -90,6 +90,7 @@ local_roundtrip_test!(local_roundtrip_v3_aws_lc, paseto_v3_aws_lc::core::V3, aad
 local_roundtrip_test!(local_roundtrip_v4, paseto_v4::core::V4, aad);
 local_roundtrip_test!(local_roundtrip_v4_sodium, paseto_v4_sodium::core::V4, aad);
 local_roundtrip_test!(local_roundtrip_v5, paseto_v5::core::V5, aad);
+local_roundtrip_test!(local_roundtrip_v6, paseto_v6::core::V6, aad);
 
 fn public_roundtrip<V>(claims: Vec<u8>, footer: Vec<u8>, aad: Vec<u8>) -> Result<(), TestCaseError>
 where
@@ -154,6 +155,8 @@ public_roundtrip_test!(public_roundtrip_v4, paseto_v4::core::V4, aad);
 public_roundtrip_test!(public_roundtrip_v4_sodium, paseto_v4_sodium::core::V4, aad);
 // ML-DSA-87 signing is ~5-10ms.
 public_roundtrip_test!(public_roundtrip_v5, paseto_v5::core::V5, aad, cases = 32);
+// SLH-DSA-SHA2-128s signing is ~1-3s.
+public_roundtrip_test!(public_roundtrip_v6, paseto_v6::core::V6, aad, cases = 2);
 
 fn local_wire_roundtrip<V>(
     claims: Vec<u8>,
@@ -278,6 +281,11 @@ wire_roundtrip_test!(
     local_wire_roundtrip::<paseto_v5::core::V5>,
     aad
 );
+wire_roundtrip_test!(
+    wire_local_v6,
+    local_wire_roundtrip::<paseto_v6::core::V6>,
+    aad
+);
 
 wire_roundtrip_test!(
     wire_public_v1,
@@ -314,6 +322,12 @@ wire_roundtrip_test!(
     public_wire_roundtrip::<paseto_v5::core::V5>,
     aad,
     cases = 32
+);
+wire_roundtrip_test!(
+    wire_public_v6,
+    public_wire_roundtrip::<paseto_v6::core::V6>,
+    aad,
+    cases = 2
 );
 
 /// Locate the payload and footer regions in a serialized PASETO.
@@ -496,6 +510,7 @@ tamper_test!(
     aad
 );
 tamper_test!(tamper_local_v5, local_tamper::<paseto_v5::core::V5>, aad);
+tamper_test!(tamper_local_v6, local_tamper::<paseto_v6::core::V6>, aad);
 
 tamper_test!(
     tamper_public_v1,
@@ -524,6 +539,12 @@ tamper_test!(
     public_tamper::<paseto_v5::core::V5>,
     aad,
     cases = 32
+);
+tamper_test!(
+    tamper_public_v6,
+    public_tamper::<paseto_v6::core::V6>,
+    aad,
+    cases = 2
 );
 
 fn local_cross_impl<VA, VB>(
