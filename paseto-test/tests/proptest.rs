@@ -89,6 +89,7 @@ local_roundtrip_test!(local_roundtrip_v3, paseto_v3::core::V3, aad);
 local_roundtrip_test!(local_roundtrip_v3_aws_lc, paseto_v3_aws_lc::core::V3, aad);
 local_roundtrip_test!(local_roundtrip_v4, paseto_v4::core::V4, aad);
 local_roundtrip_test!(local_roundtrip_v4_sodium, paseto_v4_sodium::core::V4, aad);
+local_roundtrip_test!(local_roundtrip_v5, paseto_v5::core::V5, aad);
 
 fn public_roundtrip<V>(claims: Vec<u8>, footer: Vec<u8>, aad: Vec<u8>) -> Result<(), TestCaseError>
 where
@@ -151,6 +152,8 @@ public_roundtrip_test!(public_roundtrip_v3, paseto_v3::core::V3, aad);
 public_roundtrip_test!(public_roundtrip_v3_aws_lc, paseto_v3_aws_lc::core::V3, aad);
 public_roundtrip_test!(public_roundtrip_v4, paseto_v4::core::V4, aad);
 public_roundtrip_test!(public_roundtrip_v4_sodium, paseto_v4_sodium::core::V4, aad);
+// ML-DSA-87 signing is ~5-10ms.
+public_roundtrip_test!(public_roundtrip_v5, paseto_v5::core::V5, aad, cases = 32);
 
 fn local_wire_roundtrip<V>(
     claims: Vec<u8>,
@@ -270,6 +273,11 @@ wire_roundtrip_test!(
     local_wire_roundtrip::<paseto_v4_sodium::core::V4>,
     aad
 );
+wire_roundtrip_test!(
+    wire_local_v5,
+    local_wire_roundtrip::<paseto_v5::core::V5>,
+    aad
+);
 
 wire_roundtrip_test!(
     wire_public_v1,
@@ -300,6 +308,12 @@ wire_roundtrip_test!(
     wire_public_v4_sodium,
     public_wire_roundtrip::<paseto_v4_sodium::core::V4>,
     aad
+);
+wire_roundtrip_test!(
+    wire_public_v5,
+    public_wire_roundtrip::<paseto_v5::core::V5>,
+    aad,
+    cases = 32
 );
 
 /// Locate the payload and footer regions in a serialized PASETO.
@@ -481,6 +495,7 @@ tamper_test!(
     local_tamper::<paseto_v4_sodium::core::V4>,
     aad
 );
+tamper_test!(tamper_local_v5, local_tamper::<paseto_v5::core::V5>, aad);
 
 tamper_test!(
     tamper_public_v1,
@@ -503,6 +518,12 @@ tamper_test!(
     tamper_public_v4_sodium,
     public_tamper::<paseto_v4_sodium::core::V4>,
     aad
+);
+tamper_test!(
+    tamper_public_v5,
+    public_tamper::<paseto_v5::core::V5>,
+    aad,
+    cases = 32
 );
 
 fn local_cross_impl<VA, VB>(
@@ -691,7 +712,6 @@ keytext_secret_test!(
     paseto_v4_sodium::core::V4,
     cases = 64
 );
-
 fn keyid_deterministic<V, K>(key: Key<V, K>) -> Result<(), TestCaseError>
 where
     V: IdVersion + HasKey<K>,
