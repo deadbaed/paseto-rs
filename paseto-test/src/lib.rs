@@ -1,10 +1,30 @@
+use std::error::Error;
 use std::marker::PhantomData;
 
+use paseto_core::encodings::{Payload, WriteBytes};
 use paseto_core::key::{HasKey, Key, KeyType};
 use paseto_core::paserk::KeyText;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
+
+/// Raw-bytes payload for property tests. Empty SUFFIX so tokens use the
+/// standard `vN.local.` / `vN.public.` headers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Bytes(pub Vec<u8>);
+
+impl Payload for Bytes {
+    const SUFFIX: &'static str = "";
+
+    fn encode(self, mut writer: impl WriteBytes) -> Result<(), Box<dyn Error + Send + Sync>> {
+        writer.write(&self.0);
+        Ok(())
+    }
+
+    fn decode(payload: &[u8]) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Bytes(payload.to_vec()))
+    }
+}
 
 pub fn read_test<Test: DeserializeOwned>(v: &str) -> TestFile<Test> {
     let path = format!("tests/vectors/{v}");
