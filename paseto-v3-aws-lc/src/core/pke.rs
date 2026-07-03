@@ -65,7 +65,10 @@ impl PkeSealingVersion for V3 {
     fn seal_key(sealing_key: &PublicKey, key: LocalKey) -> Result<Box<[u8]>, PasetoError> {
         let pk = sealing_key.0.compressed_pub_key();
 
+        #[cfg(not(feature = "zeroize"))]
         let esk = SecretKey::random()?.0;
+        #[cfg(feature = "zeroize")]
+        let esk = SecretKey::random()?.0.clone();
         let epk = esk.verifying_key().compressed_pub_key();
 
         let xk = esk.diffie_hellman(&sealing_key.0)?;
